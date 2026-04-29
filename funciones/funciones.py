@@ -20,7 +20,6 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import pyodbc
 import mysql.connector
-
 import mysql.connector
 import pandas as pd
 

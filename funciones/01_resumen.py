@@ -176,11 +176,11 @@ def list03_credicash(spark):
 # list02_prestamo_cenco(spark)
 # list02_negocios_efe(spark)
 # list02_tc_cenco(spark)
-list02_prestamo_dinners(spark)
+# list02_prestamo_dinners(spark)
 list02_tc_dinners(spark) 
 
-list03_alfin(spark) 
-list03_credicash(spark)
+# list03_alfin(spark) 
+# list03_credicash(spark)
 
 # bi
 # telemarketing@vensud.com

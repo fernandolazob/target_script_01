@@ -977,7 +977,8 @@ def since_base_maestra_pp_dinners(spark):
             fecha_expiracion,
 
             'TEA PPD' + ' ' + ISNULL(CONVERT(VARCHAR, tea_formato), ' ') +
-            ' TEM PPD ' + ISNULL(CONVERT(VARCHAR, tem_formato), ' ')
+            ' TEM PPD ' + ISNULL(CONVERT(VARCHAR, tem_formato), ' ') +
+            'TASA APP'+' '+isnull(CONVERT(varchar,tasa_app),' ')
             AS email,
 
             'Campaña :' + ISNULL(marca4, 'no tiene')+ CHAR(13) + CHAR(10) +
@@ -989,7 +990,6 @@ def since_base_maestra_pp_dinners(spark):
             ',Deuda_Interbank: ' + ISNULL(Deuda_Interbank,'') + CHAR(13) + CHAR(10) +
             ',Deuda_ScotiaBank: ' + ISNULL(Deuda_ScotiaBank,'') + CHAR(13) + CHAR(10) +
             ',Deuda_Falabella: ' + ISNULL(Deuda_Otros,'')
-
             AS comments,
 
             TRY_CAST(
@@ -1186,163 +1186,6 @@ def since_base_maestra_pp_dinners(spark):
         F.floor(F.months_between(F.current_date(), F.col("fec_nac")) / 12)
     )
      
-    df_base = df_base.withColumn(
-        "seg_tem_formato",
-        F.when(F.col("tem_formato") < 0.01, "a. [0%,1%)")
-        .when((F.col("tem_formato") >= 0.01) & (F.col("tem_formato") < 0.015), "b. [1%,1.5%)")
-        .when((F.col("tem_formato") >= 0.015) & (F.col("tem_formato") < 0.02), "c. [1.5%,2%)")
-        .when((F.col("tem_formato") >= 0.02) & (F.col("tem_formato") < 0.025), "d. [2%,2.5%)")
-        .when((F.col("tem_formato") >= 0.025) & (F.col("tem_formato") < 0.03), "e. [2.5%,3%)")
-        .when(F.col("tem_formato") >= 0.03, "f. [3%,+)")
-        .otherwise("z. otros")
-    )
-
-    df_base = df_base.withColumn(
-        "seg_tasa_app",
-        F.when(F.col("tasa_app") < 0.10, "a. [0%,10%)")
-        .when((F.col("tasa_app") >= 0.10) & (F.col("tasa_app") < 0.15), "b. [10%,15%)")
-        .when((F.col("tasa_app") >= 0.15) & (F.col("tasa_app") < 0.20), "c. [15%,20%)")
-        .when((F.col("tasa_app") >= 0.20) & (F.col("tasa_app") < 0.25), "d. [20%,25%)")
-        .when((F.col("tasa_app") >= 0.25) & (F.col("tasa_app") < 0.30), "e. [25%,30%)")
-        .when((F.col("tasa_app") >= 0.30) & (F.col("tasa_app") < 0.35), "f. [30%,35%)")
-        .when((F.col("tasa_app") >= 0.35) & (F.col("tasa_app") < 0.40), "g. [35%,40%)")
-        .when(F.col("tasa_app") >= 0.40, "h. [40%,+)")
-        .otherwise("z. otros")
-    )
-
-    return df_base.withColumn(
-        "vendor_lead_code",
-        F.right(
-            F.concat(F.lit("00000000"), F.col("vendor_lead_code")),
-            F.lit(8)
-        )
-    )
-
-def since_base_maestra_pp_dinners_01(spark):
-    query = f"""
-        Select
-            NumDoc as vendor_lead_code,
-            marca AS title,
-            ISNULL(nombre_producto,'') as first_name,
-            isnull(departamento,'Sin_Departamento') as last_name,
-            nombre_largo as address1,
-            'FEC.EXP.TC'+' '+isnull(SUBSTRING(fecha_expiracion,1,4),' ')+'-'+isnull(SUBSTRING(fecha_expiracion,5,2),' ')+'-'+ ' Numcuots: '+  isnull(CONVERT(varchar,nrocuotas_rest),' ')  AS address2,
-            'CICLO '+ isnull(CONVERT(varchar,ciclo),' ') + ' nro_tc:'+ISNULL(nro_tarjeta,'')  AS address3,
-            ISNULL(distrito,'') as city,
-            ISNULL(provincia,'') as province,
-            fecha_expiracion,
-            'TEA PPD'+' '+isnull(CONVERT(varchar,tea_formato),' ')+' TEM PPD '+isnull(CONVERT(varchar,tem_formato),' ') as email,
-            'Oferta.PPD:' + saldo_ppd AS security_phrase,
-            'TASA APP'+' '+isnull(CONVERT(varchar,tasa_app),' ') as comments,
-            CONVERT(float, REPLACE(Deuda_BCP, ',', '.'))   AS deuda_bcp,
-            CONVERT(float, REPLACE(Deuda_Continental, ',', '.'))   AS deuda_continental,
-            CONVERT(float, REPLACE(Deuda_ScotiaBank, ',', '.'))   AS deuda_scotiaBank,
-            CONVERT(float, REPLACE(Deuda_Interbank, ',', '.'))   AS deuda_interbank,
-            CONVERT(float, REPLACE(Deuda_Otros, ',', '.'))   AS deuda_otros,
-            CONVERT(date, CAST(FechaNacimiento AS varchar(8))) AS fec_nac,
-            trim(estadocivil) as estadocivil,
-            CAST(
-                REPLACE(REPLACE(tea_formato, '%', ''), ',', '.') 
-                AS DECIMAL(10,4)
-            ) / 100 AS tea_formato,
-            CAST(
-                REPLACE(REPLACE(tem_formato, '%', ''), ',', '.') 
-                AS DECIMAL(10,4)
-            ) / 100 AS tem_formato,
-            nacionalidad,
-            Flag_entrega,
-            case 
-                when mes_entrega is not null and mes_entrega<>0 then CONVERT(date, CAST(mes_entrega AS varchar(6)) + '01')
-                else null
-            end as mes_entrega,                                                     
-            cast(replace(right(prioridad_inicial,2),' ','') as int)as prioridad_inicial,ciclo,flg_segmento_digital,
-            CAST(REPLACE(tasa_app,',','.') AS float)/100 as tasa_app,
-            oferppd,oferppdplus,oferds,oferbt,marca2,marca3,recencia,linea_ei_60m,oferta_disef,oferta_ppd,tasappd,saldo_ppd,nrocuotas_rest,cargo,profesion,rpioridadvocales,estado_tarjeta,distrito_lab,case when rep1=1 then 'stock' else 'nuevo' end as rep,fecha_envio,flag_adicion,
-            case
-                when len(replace(retiro,' ',''))>3  then lower(replace(retiro,' ','_'))
-                else 'no_aplica'
-            end as retiro ,
-            nombre_producto,cel01
-        FROM DANTALION.dbo.Base_Maestra_Diners_Vigente
-    """
-    df_base=obtener_tabla_sql(spark,query,server_kishin,user_kishin,pwd_kishin,db_kishin)
-
-    df_base = df_base.withColumn(
-        "monto_deuda_max",
-        greatest(
-            F.col("deuda_bcp"), F.col("deuda_continental"), F.col("deuda_scotiaBank"), F.col("deuda_interbank"),
-            F.col("deuda_otros")
-        )
-    )
-
-    df_base = df_base.withColumn(
-        "deuda_bench",
-        F.when(F.col("monto_deuda_max") == F.col("deuda_bcp"), "deuda_bcp")
-        .when(F.col("monto_deuda_max") == F.col("deuda_continental"), "deuda_continental")
-        .when(F.col("monto_deuda_max") == F.col("deuda_scotiaBank"), "deuda_scotiaBank")
-        .when(F.col("monto_deuda_max") == F.col("deuda_interbank"), "deuda_interbank")
-        .when(F.col("monto_deuda_max") == F.col("deuda_otros"), "deuda_otros")
-        .otherwise("OTROS")
-    )
-
-    df_base = df_base.withColumn(
-        "seg_edad",
-        F.when((F.floor(F.months_between(F.current_date(), F.col("fec_nac"))/12) >= 20) &
-            (F.floor(F.months_between(F.current_date(), F.col("fec_nac"))/12) < 30), "a. 20 A 30")
-        .when((F.floor(F.months_between(F.current_date(), F.col("fec_nac"))/12) >= 30) &
-            (F.floor(F.months_between(F.current_date(), F.col("fec_nac"))/12) < 40), "b. 30 A 40")
-        .when((F.floor(F.months_between(F.current_date(), F.col("fec_nac"))/12) >= 40) &
-            (F.floor(F.months_between(F.current_date(), F.col("fec_nac"))/12) < 50), "c. 40 A 50")
-        .when((F.floor(F.months_between(F.current_date(), F.col("fec_nac"))/12) >= 50) &
-            (F.floor(F.months_between(F.current_date(), F.col("fec_nac"))/12) < 60), "d. 50 A 60")
-        .when((F.floor(F.months_between(F.current_date(), F.col("fec_nac"))/12) >= 60) &
-            (F.floor(F.months_between(F.current_date(), F.col("fec_nac"))/12) < 76), "e. 60 A 70")
-        .otherwise('f. Otros')
-    )
-    df_base = df_base.withColumn(
-        'edad',
-        F.floor(F.months_between(F.current_date(), F.col("fec_nac")) / 12)
-    )
-            
-    df_base = df_base.withColumn(
-        "mes_entrega_dif",
-        F.floor(
-            F.months_between(
-                F.current_date(),
-                F.col("mes_entrega")
-            )
-        )
-    )
-
-    df_base = df_base.withColumn(
-        "seg_saldo_ppd",
-        F.when(F.col("saldo_ppd") < 10000, "a. [0,10k)")
-        .when((F.col("saldo_ppd") >= 10000) & (F.col("saldo_ppd") < 20000), "b. [10k,20k)")
-        .when((F.col("saldo_ppd") >= 20000) & (F.col("saldo_ppd") < 30000), "c. [20k,30k)")
-        .when((F.col("saldo_ppd") >= 30000) & (F.col("saldo_ppd") < 40000), "d. [30k,40k)")
-        .when((F.col("saldo_ppd") >= 40000) & (F.col("saldo_ppd") < 50000), "e. [40k,50k)")
-        .when((F.col("saldo_ppd") >= 50000) & (F.col("saldo_ppd") < 60000), "f. [50k,60k)")
-        .when((F.col("saldo_ppd") >= 60000) & (F.col("saldo_ppd") < 70000), "g. [60k,70k)")
-        .when((F.col("saldo_ppd") >= 70000) & (F.col("saldo_ppd") < 80000), "h. [70k,80k)")
-        .when((F.col("saldo_ppd") >= 80000) & (F.col("saldo_ppd") < 90000), "i. [80k,90k)")
-        .when(F.col("saldo_ppd") >= 90000, "j. [90k,+)")
-        .otherwise("z. otros")
-    )
-
-    df_base = df_base.withColumn(
-        "seg_tea_formato",
-        F.when(F.col("tea_formato") < 0.10, "a. [0%,10%)")
-        .when((F.col("tea_formato") >= 0.10) & (F.col("tea_formato") < 0.15), "b. [10%,15%)")
-        .when((F.col("tea_formato") >= 0.15) & (F.col("tea_formato") < 0.20), "c. [15%,20%)")
-        .when((F.col("tea_formato") >= 0.20) & (F.col("tea_formato") < 0.25), "d. [20%,25%)")
-        .when((F.col("tea_formato") >= 0.25) & (F.col("tea_formato") < 0.30), "e. [25%,30%)")
-        .when((F.col("tea_formato") >= 0.30) & (F.col("tea_formato") < 0.35), "f. [30%,35%)")
-        .when((F.col("tea_formato") >= 0.35) & (F.col("tea_formato") < 0.40), "g. [35%,40%)")
-        .when((F.col("tea_formato") >= 0.40) & (F.col("tea_formato") < 0.45), "h. [40%,45%)")
-        .when(F.col("tea_formato") >= 0.45, "i. [45%,+)")
-        .otherwise("z. otros")
-    )
-
     df_base = df_base.withColumn(
         "seg_tem_formato",
         F.when(F.col("tem_formato") < 0.01, "a. [0%,1%)")
@@ -1785,6 +1628,16 @@ def since_base_maestra_alfin(spark,fecha_mes_base):
         where cl_base='{cl_base1}'
         """
     df_base=obtener_tabla_sql(spark,query,server_sa,user_sa,pwd_sa,db_sa)
+
+    query = f"""
+            SELECT DISTINCT dni_cliente FROM valentina.dbo.tb_retirogestion_blacklist
+        """
+    df_retiro_dni_contacto=obtener_tabla_sql(spark,query,server_sa,user_sa,pwd_sa,db_sa)
+    df_base=df_base.join(df_retiro_dni_contacto,['dni_cliente'],'leftanti')
+#     query = f"""
+# SELECT DISTINCT dni_cliente FROM valentina.dbo.tb_retirogestion_blacklist
+#         """
+#     df_retiro_dni_contacto=obtener_tabla_sql(spark,query,server_sa,user_sa,pwd_sa,db_sa)
 
     df_base= df_base.withColumn(
         "seg_oferta",
