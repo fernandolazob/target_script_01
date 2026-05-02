@@ -953,6 +953,9 @@ def since_base_maestra_tc_dinners(spark):
         )
     )
 
+
+# TRY_CAST(REPLACE(RIGHT(prioridad_inicial, 2), ' ', '') AS INT) AS prioridad_inicial,
+
 def since_base_maestra_pp_dinners(spark):
     query = f"""
         SELECT
@@ -982,7 +985,7 @@ def since_base_maestra_pp_dinners(spark):
             AS email,
 
             'Campaña :' + ISNULL(marca4, 'no tiene')+ CHAR(13) + CHAR(10) +
-            'Oferta.PPD:' + ISNULL(CAST(saldo_ppd AS VARCHAR), '')
+            'Oferta.PPD:' + ISNULL(CAST(Linea_EI_60M AS VARCHAR), '')
             AS security_phrase,
 
             ',Deuda_BCP: ' + ISNULL(Deuda_BCP,'') + CHAR(13) + CHAR(10) +
@@ -1060,7 +1063,8 @@ def since_base_maestra_pp_dinners(spark):
                 ELSE NULL
             END AS mes_entrega,
 
-            TRY_CAST(REPLACE(RIGHT(prioridad_inicial, 2), ' ', '') AS INT) AS prioridad_inicial,
+            TRY_CAST(REPLACE( LEFT(prioridad_inicial, CHARINDEX('.', prioridad_inicial) - 1) , ' ', '') AS INT) AS prioridad_inicial,
+
             ciclo,
             flg_segmento_digital,
 
@@ -1629,15 +1633,15 @@ def since_base_maestra_alfin(spark,fecha_mes_base):
         """
     df_base=obtener_tabla_sql(spark,query,server_sa,user_sa,pwd_sa,db_sa)
 
-    query = f"""
-            SELECT DISTINCT dni_cliente FROM valentina.dbo.tb_retirogestion_blacklist
-        """
-    df_retiro_dni_contacto=obtener_tabla_sql(spark,query,server_sa,user_sa,pwd_sa,db_sa)
-    df_base=df_base.join(df_retiro_dni_contacto,['dni_cliente'],'leftanti')
-#     query = f"""
-# SELECT DISTINCT dni_cliente FROM valentina.dbo.tb_retirogestion_blacklist
-#         """
-#     df_retiro_dni_contacto=obtener_tabla_sql(spark,query,server_sa,user_sa,pwd_sa,db_sa)
+    # query = f"""
+    #         SELECT DISTINCT dni_cliente FROM valentina.dbo.tb_retirogestion_blacklist
+    #     """
+    # df_retiro_dni_contacto=obtener_tabla_sql(spark,query,server_sa,user_sa,pwd_sa,db_sa)
+    # df_base=df_base.join(df_retiro_dni_contacto,['dni_cliente'],'leftanti')
+    #     query = f"""
+    # SELECT DISTINCT dni_cliente FROM valentina.dbo.tb_retirogestion_blacklist
+    #         """
+    #     df_retiro_dni_contacto=obtener_tabla_sql(spark,query,server_sa,user_sa,pwd_sa,db_sa)
 
     df_base= df_base.withColumn(
         "seg_oferta",
