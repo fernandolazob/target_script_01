@@ -1,6 +1,5 @@
 from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo  # Python 3.9+
-import pandas as pd
 import numpy as np
 import re
 import os
@@ -8,10 +7,10 @@ import unicodedata
 # import mariadb
 from math import ceil
 import builtins
-from sqlalchemy import create_engine
 import urllib
 from io import BytesIO
 
+from sqlalchemy import create_engine
 
 from pyspark.sql import SparkSession
 from pyspark.sql import functions as F
@@ -20,8 +19,6 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import pyodbc
 import mysql.connector
-import mysql.connector
-import pandas as pd
 
 def update_mysql_en_bloques(df,tabla,periodo,col_llave_mysql,col_valor_mysql,col_llave_df,col_valor_df,host,user,password,database,port=3306,batch_size=10000,validar_sin_grabar=False):
     conn = mysql.connector.connect(
@@ -245,6 +242,74 @@ def pareto_mejor_descripcion(df,tipificaicon_telf):
 
 
 
+
+
+
+def vicidial_hoy_valentina(name_campana,fecha_mes_base,app_campana,user_valentina,pwd_valentina,server_valentina,port_mysql,db_valentina):
+    cl_base1 = fecha_a_nombre(fecha_mes_base)
+    engine_mysql = create_engine(
+        f"mysql+pymysql://{user_valentina}:{pwd_valentina}@{server_valentina}:{port_mysql}/{db_valentina}"
+    )
+
+    query = f"""
+    SELECT
+        cid,
+        telefono AS contacto,
+        fecha_llamada,
+        duracion,
+        CASE
+            WHEN tipificacion = 'AB'   THEN 25
+            WHEN tipificacion = 'NA'   THEN 26
+            WHEN tipificacion = 'AA'   THEN 25
+            WHEN tipificacion = 'DROP' THEN 27
+            WHEN tipificacion = 'ADC'  THEN 25
+        END AS codigo,
+        null as dni_ejecutivo
+    FROM crm_target.valentina_llamadas
+    WHERE app = {app_campana}
+    AND fecha_llamada = CURDATE()- INTERVAL 0 DAY
+    """
+
+    df_maquina = pd.read_sql(query, engine_mysql)
+
+    query = f"""
+    SELECT
+        a.ll_cid AS cid,
+        a.ll_numero AS contacto,
+        a.ll_fecha AS fecha_llamada,
+        a.ll_duracion AS duracion,
+        b.id_banco AS codigo,
+        CAST(NULL AS CHAR) AS dni_ejecutivo
+    FROM crm_target.{name_campana}_llamadas a
+    LEFT JOIN crm_target.{name_campana}_acciones b
+        ON a.ll_accion = b.id
+    WHERE a.ll_base = '{cl_base1}'
+    AND a.ll_fecha = CURDATE()- INTERVAL 0 DAY
+    """
+
+    ruta_csv='C:\\Users\\DATA\\Documents\\datos\\05_subir_csv'
+    df_agente = pd.read_sql(query, engine_mysql)
+
+    df = pd.concat([df_maquina, df_agente], ignore_index=True)
+    ruta_archivo = os.path.join(ruta_csv, 'tmp_vici.csv')
+    df.to_csv(ruta_archivo, index=False,sep=';')
+
+
+def ventas_valentina_mes(name_campana,fecha_mes_base,user_valentina,pwd_valentina,server_valentina,port_mysql,db_valentina):
+    cl_base1 = fecha_a_nombre(fecha_mes_base)
+    engine_mysql = create_engine(
+        f"mysql+pymysql://{user_valentina}:{pwd_valentina}@{server_valentina}:{port_mysql}/{db_valentina}"
+    )
+
+    query = f"""
+    select cid as cl_id,estado as estado_venta from {name_campana}_ventas
+    where base='{cl_base1}'
+    """
+    df = pd.read_sql(query, engine_mysql)
+
+    ruta_csv='C:\\Users\\DATA\\Documents\\datos\\05_subir_csv'
+    ruta_archivo = os.path.join(ruta_csv, 'tmp_vent.csv')
+    df.to_csv(ruta_archivo, index=False,sep=';')
 
 
 

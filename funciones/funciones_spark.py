@@ -74,7 +74,6 @@ def append_table_SQL(spark,df,new_table,server,username,pwd,db):
     except Exception as e:  
         print("Error al insertar JDBC:", e)   
 
-
 def append_table_mysql(spark, df, new_table, server, username, pwd, db):
 
     jdbc_url = f"jdbc:mysql://{server}:{port_mysql}/{db}?useSSL=false&allowPublicKeyRetrieval=true"
@@ -112,6 +111,113 @@ def since_valentina(spark,fecha_mes_base,tb_tipolofia,tb_gestiones):
         """
     df_vicidial=obtener_tabla_sql(spark,query,server_sa,user_sa,pwd_sa,db_sa)
         
+    query = f"""
+        SELECT 
+        nombre as descripcion,
+        id_banco as codigo,
+        id as peso
+        FROM VALENTINA.dbo.{tb_tipolofia}
+        where estado='a'
+        """
+    df_tipi=obtener_tabla_sql(spark,query,server_sa,user_sa,pwd_sa,db_sa)
+
+    df_vicidial=df_vicidial.join(df_tipi,["codigo"],"left")
+
+    window_spec = Window.partitionBy("dni_cliente").orderBy(col("peso").asc_nulls_last())
+    df_vicidial = df_vicidial.withColumn("n_mejor_resul", row_number().over(window_spec))
+
+    window_part = Window.partitionBy("dni_cliente")
+    df_vicidial = df_vicidial.withColumn(
+        "mejor_codigo_cli",
+        F.max(
+            F.when(F.col("n_mejor_resul") == 1, F.col("codigo"))
+        ).over(window_part)
+    )
+
+    window_part = Window.partitionBy("dni_cliente","contacto","codigo")
+
+    df_vicidial = df_vicidial.withColumn(
+        "cod_attempt",
+        F.count("codigo").over(window_part)
+    )
+
+    window_spec = Window.partitionBy("fecha_llamada","dni_cliente").orderBy(col("peso").asc_nulls_last())
+    df_vicidial = df_vicidial.withColumn("n_mejor_resul_dia", row_number().over(window_spec))
+
+    window_part = Window.partitionBy("dni_cliente")
+    df_vicidial = df_vicidial.withColumn(
+        "mejor_codigo_cli_dia",
+        F.max(
+            F.when(F.col("n_mejor_resul_dia") == 1, F.col("codigo"))
+        ).over(window_part)
+    )
+
+    df_vicidial = df_vicidial.withColumn(
+        "q_intentos_telef",
+        count("*").over(window_part)
+    )
+
+    window_spec = Window.partitionBy("dni_cliente",'contacto').orderBy(col("fecha_llamada").desc())
+    df_vicidial = df_vicidial.withColumn("n_ult_resul", row_number().over(window_spec))
+
+    window_part = Window.partitionBy("dni_cliente",'contacto')
+    df_vicidial = df_vicidial.withColumn(
+        "ult_codigo_result",
+        F.max(
+            F.when(F.col("n_ult_resul") == 1, F.col("codigo"))
+        ).over(window_part)
+    )
+    df_vicidial = df_vicidial.withColumn(
+        "fecha_llamada_1",
+        F.max(
+            F.when(F.col("n_ult_resul") == 1, F.col("fecha_llamada"))
+        ).over(window_part)
+    )    
+
+    return df_vicidial.select('dni_cliente', 'duracion', 'fecha_llamada', 'mejor_codigo_cli','peso','contacto','codigo','n_mejor_resul','mejor_codigo_cli_dia','cod_attempt','dni_ejecutivo','q_intentos_telef','descripcion','ult_codigo_result','fecha_llamada_1')
+
+
+
+
+def since_valentina_actual(spark,fecha_mes_base,tb_tipolofia,tb_gestiones,name_campana,app_campana):
+
+    vicidial_hoy_valentina(name_campana,fecha_mes_base,app_campana,user_valentina,pwd_valentina,server_valentina,port_mysql,db_valentina)
+    vicidial_hoy=cargar_archivo_csv(spark,'tmp_vici.csv',';',True)
+
+    cl_base1 = fecha_a_nombre(fecha_mes_base)
+    query = f"""
+        select distinct cl_id as cid,NUMERO_DOCUMENTO as dni_cliente from valentina.dbo.{name_campana}_clientes
+        where cl_base='{cl_base1}'
+        """
+    df_cl_id=obtener_tabla_sql(spark,query,server_sa,user_sa,pwd_sa,db_sa)
+
+    vicidial_hoy=vicidial_hoy.join(df_cl_id,['cid'],'inner')
+    vicidial_hoy=vicidial_hoy.select( 'contacto', 'fecha_llamada', 'duracion', 'codigo', 'dni_ejecutivo', 'dni_cliente')
+    vicidial_hoy = vicidial_hoy.withColumn(
+        "dni_cliente",
+        F.right(
+            F.concat(F.lit("00000000"), F.col("dni_cliente")),
+            F.lit(8)
+        )
+    )
+   
+    window_part = Window.partitionBy("dni_cliente","contacto","codigo")
+
+    query = f"""
+        select 
+        dni_cliente,
+        fecha as fecha_llamada,Celular as contacto,
+        Tipificacion as codigo,
+        tmo as duracion,
+        dni_ejecutivo
+        from VALENTINA.dbo.{tb_gestiones}
+        WHERE CAST(fecha AS DATE) >= CAST('{fecha_mes_base}' AS DATE)
+        AND CAST(fecha AS DATE) < DATEADD(MONTH, 1, CAST('{fecha_mes_base}' AS DATE))
+        """
+    df_vicidial=obtener_tabla_sql(spark,query,server_sa,user_sa,pwd_sa,db_sa)
+        
+    df_vicidial=df_vicidial.unionByName(vicidial_hoy)
+
     query = f"""
         SELECT 
         nombre as descripcion,
@@ -979,20 +1085,49 @@ def since_base_maestra_pp_dinners(spark):
             ISNULL(provincia, '') AS province,
             fecha_expiracion,
 
-            'TEA PPD' + ' ' + ISNULL(CONVERT(VARCHAR, tea_formato), ' ') +
-            ' TEM PPD ' + ISNULL(CONVERT(VARCHAR, tem_formato), ' ') +
-            'TASA APP'+' '+isnull(CONVERT(varchar,tasa_app),' ')
+            CASE
+            WHEN tea_formato IS NOT NULL AND tea_PPD IS NOT NULL THEN 
+            'TEA' + ' ' + ISNULL(CONVERT(VARCHAR, tea_formato), ' ') +' '+
+            'TEA anterior' + ' ' + ISNULL(CONVERT(VARCHAR, tea_PPD), ' ') +' '+
+            ' TEM ppd ' + ISNULL(CONVERT(VARCHAR, tem_formato), ' ') +' '+
+            'TASA app'+' '+isnull(CONVERT(varchar,tasa_app),' ')
+            WHEN tea_formato IS NOT NULL THEN 
+            'TEA' + ' ' + ISNULL(CONVERT(VARCHAR, tea_formato), ' ') +' '+
+            ' TEM ' + ISNULL(CONVERT(VARCHAR, tem_formato), ' ') +' '+
+            'TASA app'+' '+isnull(CONVERT(varchar,tasa_app),' ')
+            WHEN tea_PPD IS NOT NULL THEN 
+            'TEA anterior' + ' ' + ISNULL(CONVERT(VARCHAR, tea_PPD), ' ') +' '+
+            ' TEM ' + ISNULL(CONVERT(VARCHAR, tem_formato), ' ') +' '+
+            'TASA app'+' '+isnull(CONVERT(varchar,tasa_app),' ')
+            END
             AS email,
 
-            'Campaña :' + ISNULL(marca4, 'no tiene')+ CHAR(13) + CHAR(10) +
-            'Oferta.PPD:' + ISNULL(CAST(Linea_EI_60M AS VARCHAR), '')
+            CASE
+            WHEN saldo_ppd IS NOT NULL  AND Linea_EI_60M IS NOT NULL THEN 
+            'saldo:' + ISNULL(CAST(saldo_ppd AS VARCHAR), '')+' '+ 
+            'Monto:' + ISNULL(CAST(Linea_EI_60M AS VARCHAR), '')+' '+ 
+            'Campaña :' + ISNULL(marca4, 'no tiene')
+            WHEN saldo_ppd IS NOT NULL  THEN 
+            'saldo:' + ISNULL(CAST(saldo_ppd AS VARCHAR), '')+' '+ 
+            'Campaña :' + ISNULL(marca4, 'no tiene')
+            WHEN Linea_EI_60M IS NOT NULL THEN 
+            'Monto:' + ISNULL(CAST(Linea_EI_60M AS VARCHAR), '')+' '+ 
+            'Campaña :' + ISNULL(marca4, 'no tiene')
+            END 
             AS security_phrase,
 
-            ',Deuda_BCP: ' + ISNULL(Deuda_BCP,'') + CHAR(13) + CHAR(10) +
-            ',Deuda_Continental: ' + ISNULL(Deuda_Continental,'') + CHAR(13) + CHAR(10) +
-            ',Deuda_Interbank: ' + ISNULL(Deuda_Interbank,'') + CHAR(13) + CHAR(10) +
-            ',Deuda_ScotiaBank: ' + ISNULL(Deuda_ScotiaBank,'') + CHAR(13) + CHAR(10) +
-            ',Deuda_Falabella: ' + ISNULL(Deuda_Otros,'')
+            CASE
+                WHEN MARCA='CD' THEN ',Deuda_BCP: ' + ISNULL(Deuda_BCP,'') +' '+ CHAR(13) + CHAR(10) +
+            ',Deuda_bbva: ' + ISNULL(Deuda_Continental,'') +' '+ CHAR(13) + CHAR(10) +
+            ',Deuda_ibk: ' + ISNULL(Deuda_Interbank,'') +' '+ CHAR(13) + CHAR(10) +
+            ',Deuda_cco: ' + ISNULL(Deuda_ScotiaBank,'') +' '+ CHAR(13) + CHAR(10) +
+            ',Deuda_Falab: ' + ISNULL(Deuda_Otros,'')
+            ELSE 
+                case
+                    when TRY_CAST(REPLACE( LEFT(prioridad_inicial, CHARINDEX('.', prioridad_inicial) - 1) , ' ', '') AS INT) in (4,5) then 'seguro 3%'
+                    else ''
+                end 
+            END
             AS comments,
 
             TRY_CAST(
@@ -1093,7 +1228,18 @@ def since_base_maestra_pp_dinners(spark):
             rpioridadvocales,
             estado_tarjeta,
             distrito_lab,
-
+            TRY_CAST(
+                REPLACE(
+                    NULLIF(REPLACE(TRIM(tea_ppd), '%', ''), ''),
+                    ',', '.'
+                ) AS DECIMAL(10,4)
+            ) / 100 AS tea_ppd,
+            TRY_CAST(
+                REPLACE(
+                    NULLIF(REPLACE(TRIM(Linea_EI_60M), '-', ''), ''),
+                    ',', '.'
+                ) AS FLOAT
+            ) AS monto_ppd,
             CASE
                 WHEN rep1 = 1 THEN 'stock'
                 ELSE 'nuevo'
@@ -1620,8 +1766,11 @@ def since_base_maestra_alfin(spark,fecha_mes_base):
             campania,
             tienda,
             plazo,
-            estado,
-            cl_estado,
+            case
+                when cl_estado>1  then estado
+                when cl_estado is null  then 'revisar'
+                else 'no_aplica'
+            end as retiro ,            
             propension,
             propension_ic,flg_deuda_plus,tipo_base,user_v3,nombre_base,prioridad,
             agencia_comercial,cl_carga,
@@ -1715,6 +1864,11 @@ def since_base_maestra_alfcc(spark,fecha_mes_base):
             demanda,
             prioridad,
             inicio,
+            case
+                when cl_estado>1  then 'retiro'
+                when cl_estado is null  then 'revisar'
+                else 'no_aplica'
+            end as retiro ,           
             fin,
             producto_interno,
             case   
@@ -1883,54 +2037,53 @@ def since_tnumeros_valentina(spark,tb_valentina_cliente,fecha_mes_base):
     df_tnumero = df_tnumero.withColumn("ref_01", row_number().over(window_spec))
     return df_tnumero.filter(F.col("ref_01") == 1).drop('ref_01','cl_carga')
 
+# def update_tnumeros_valentina(spark,tb_valentina_cliente,fecha_mes_base,tb_tnumero):
+#     cl_base1 = fecha_a_nombre(fecha_mes_base)
+#     query = f"""
+#         SELECT 
+#             a.NUMERO_DOCUMENTO as dni_cliente,
+#             t.contacto,
+#             t.tipo_telf,
+#             a.cl_carga
+#         FROM VALENTINA.dbo.{tb_valentina_cliente} a
 
-def update_tnumeros_valentina(spark,tb_valentina_cliente,fecha_mes_base,tb_tnumero):
-    cl_base1 = fecha_a_nombre(fecha_mes_base)
-    query = f"""
-        SELECT 
-            a.NUMERO_DOCUMENTO as dni_cliente,
-            t.contacto,
-            t.tipo_telf,
-            a.cl_carga
-        FROM VALENTINA.dbo.{tb_valentina_cliente} a
+#         OUTER APPLY (
+#             VALUES
+#                 (a.cl_telf1, 'cel01'),
+#                 (a.cl_telf2, 'cel02'),
+#                 (a.cl_telf3, 'cel03'),
+#                 (a.cl_telf4, 'cel04'),
+#                 (a.cl_telf5, 'cel05'),
+#                 (a.cl_telf6, 'cel06'),
+#                 (a.cl_telf7, 'cel07'),
+#                 (a.cl_telf8, 'cel08'),
+#                 (a.cl_telf9, 'cel09'),
+#                 (a.cl_telf10, 'cel10'),
+#                 (a.cl_movil, 'cel11'),
+#                 (a.cl_celular, 'cel12'),
+#                 (a.cl_telefono, 'cel13')
+#         ) t(contacto, tipo_telf)
 
-        OUTER APPLY (
-            VALUES
-                (a.cl_telf1, 'cel01'),
-                (a.cl_telf2, 'cel02'),
-                (a.cl_telf3, 'cel03'),
-                (a.cl_telf4, 'cel04'),
-                (a.cl_telf5, 'cel05'),
-                (a.cl_telf6, 'cel06'),
-                (a.cl_telf7, 'cel07'),
-                (a.cl_telf8, 'cel08'),
-                (a.cl_telf9, 'cel09'),
-                (a.cl_telf10, 'cel10'),
-                (a.cl_movil, 'cel11'),
-                (a.cl_celular, 'cel12'),
-                (a.cl_telefono, 'cel13')
-        ) t(contacto, tipo_telf)
-
-        WHERE 
-            a.cl_base = '{cl_base1}'
-            AND (
-                (
-                    t.contacto IS NOT NULL
-                    AND t.contacto <> ''
-                    AND LEN(t.contacto) = 9
-                    AND t.contacto LIKE '9%'
-                )
-                OR t.contacto IS NULL   
-            )
+#         WHERE 
+#             a.cl_base = '{cl_base1}'
+#             AND (
+#                 (
+#                     t.contacto IS NOT NULL
+#                     AND t.contacto <> ''
+#                     AND LEN(t.contacto) = 9
+#                     AND t.contacto LIKE '9%'
+#                 )
+#                 OR t.contacto IS NULL   
+#             )
         
-        """
-    df_tnumero=obtener_tabla_sql(spark,query,server_sa,user_sa,pwd_sa,db_sa)
+#         """
+#     df_tnumero=obtener_tabla_sql(spark,query,server_sa,user_sa,pwd_sa,db_sa)
 
-    window_spec = Window.partitionBy("dni_cliente").orderBy(F.col("contacto").desc_nulls_last())
-    df_tnumero = df_tnumero.withColumn("ref_01", row_number().over(window_spec))
-    df_tnumero=df_tnumero.filter(F.col("ref_01") == 1).drop('ref_01','cl_carga')
+#     window_spec = Window.partitionBy("dni_cliente").orderBy(F.col("contacto").desc_nulls_last())
+#     df_tnumero = df_tnumero.withColumn("ref_01", row_number().over(window_spec))
+#     df_tnumero=df_tnumero.filter(F.col("ref_01") == 1).drop('ref_01','cl_carga')
 
-    overwrite_table_SQL(spark,df_tnumero,tb_tnumero,server_kishin,user_kishin,pwd_kishin,db_kishin)
+#     overwrite_table_SQL(spark,df_tnumero,tb_tnumero,server_kishin,user_kishin,pwd_kishin,db_kishin)
 
 
 
@@ -1938,8 +2091,7 @@ def update_tnumeros_valentina(spark,tb_valentina_cliente,fecha_mes_base,tb_tnume
 
 def lista_generada(spark,fecha_mes_base,tipi_cond1,tipi_cond2,tipi_cond3,tb_tipolofia,servidor_01,tipi_cod,tipi_resp_cod,tipi_descrip,tipi_estado,tipi_resp_estado,tipi_subdescripcion,tnum_tb,tnum_dni,tlista_generada,get_base):
 
-    df_vicidial=since_vicidial(spark,fecha_mes_base,tipi_cond1,tipi_cond2,tipi_cond3,tb_tipolofia,servidor_01,tipi_cod,
-    tipi_resp_cod,tipi_descrip,tipi_estado,tipi_resp_estado,tnum_tb,tnum_dni)
+    df_vicidial=since_vicidial(spark,fecha_mes_base,tipi_cond1,tipi_cond2,tipi_cond3,tb_tipolofia,servidor_01,tipi_cod,tipi_resp_cod,tipi_descrip,tipi_estado,tipi_resp_estado,tnum_tb,tnum_dni)
     
     # window_spec = Window.partitionBy("title","vendor_lead_code","phone_number").orderBy(F.col("fecha_hora_llamada").desc_nulls_last())
     window_spec = Window.partitionBy("vendor_lead_code","phone_number").orderBy(F.col("fecha_hora_llamada").desc_nulls_last())
@@ -2238,20 +2390,20 @@ def lista_generada_valentina(spark,fecha_mes_base,ls_una_vez,ls_casilla,ls_ocupa
     df_lista = df_lista.filter(col("ref_01") == 1).drop('ref_01')
 
     query = f"""
-        SELECT DISTINCT dni_cliente,contacto,retiro
+        SELECT DISTINCT dni_cliente,contacto,retiro4
         FROM (
             SELECT dni_cliente,celular as contacto,
             case
                 when tipificacion in (4,5) then 'seguimiento -1'
                 else 'no llamar -1'
-            end as retiro
+            end as retiro4
             FROM valentina.dbo.alfin_gestion
             WHERE DNI_ejecutivo!='99999999' 
             and tipificacion in ('4','5','16','17')
             and CAST(fecha AS DATE) >= DATEADD(MONTH, -1, CAST('{fecha_mes_base}' AS DATE))
             AND CAST(fecha AS DATE) < DATEADD(MONTH, 0, CAST('{fecha_mes_base}' AS DATE))
             UNION ALL
-            SELECT DISTINCT dni_cliente,CELULAR as contacto, 'excluir' as retiro
+            SELECT DISTINCT dni_cliente,CELULAR as contacto, 'excluir' as retiro4
             FROM valentina.dbo.Excluir_Gestion_TARGET where servicio in ('ALFIN','ALFCC')
         ) t
         """
@@ -2283,9 +2435,9 @@ def lista_generada_valentina(spark,fecha_mes_base,ls_una_vez,ls_casilla,ls_ocupa
     df_lista = df_lista.withColumn("retiro", when(F.col('retiro1')=='venta','venta')
                                             .when(F.col('retiro2')=='indecopi','indecopi')
                                             .when(F.col('retiro2')=='retiro','retiro')
-                                            .when(F.col('retiro')=='excluir','retiro')
-                                            .when(F.col('retiro')=='no llamar -1','no volver a llamar')
-                                            .when(F.col('retiro')=='seguimiento -1','seguimiento')
+                                            .when(F.col('retiro4')=='no llamar -1','no volver a llamar')
+                                            .when(F.col('retiro4')=='seguimiento -1','seguimiento')
+                                            .when(F.col('retiro')!='no_aplica',F.col('retiro'))
                                             .otherwise(F.lit('no aplica'))
                                             ).drop('retiro1','retiro2')
     df_lista = df_lista.withColumn("retiro_id", when(F.col('retiro')=='venta',1)
@@ -2321,6 +2473,264 @@ def lista_generada_valentina(spark,fecha_mes_base,ls_una_vez,ls_casilla,ls_ocupa
     ])
     overwrite_table_SQL(spark,df_lista,f'{tlista_generada}',server_sa,user_sa,pwd_sa,'CRONOX')
     print(f'tabla {tlista_generada} actualizada')
+
+
+def lista_generada_valentina_actual(spark,fecha_mes_base,ls_una_vez,ls_casilla,ls_ocupado,tlista_generada,tb_tipolofia,tb_gestiones,tb_cliente,get_base,name_campana,app_campana):
+
+    ventas_valentina_mes(name_campana,fecha_mes_base,user_valentina,pwd_valentina,server_valentina,port_mysql,db_valentina)
+    df_venta=cargar_archivo_csv(spark,'tmp_vent.csv',';',True)
+
+    df_vicidial=since_valentina_actual(spark,fecha_mes_base,tb_tipolofia,tb_gestiones,name_campana,app_campana)
+    df_base_vigente = get_base(spark,fecha_mes_base)
+    df_base_vigente = df_base_vigente.withColumn(
+        "dni_cliente",
+        F.right(
+            F.concat(F.lit("00000000"), F.col("dni_cliente")),
+            F.lit(8)
+        )
+    )
+
+    df_tnumeric=since_tnumeros_valentina(spark,tb_cliente,fecha_mes_base)
+    df_tnumeric = df_tnumeric.withColumn(
+        "dni_cliente",
+        F.right(
+            F.concat(F.lit("00000000"), F.col("dni_cliente")),
+            F.lit(8)
+        )
+    )
+
+    df_mejor_telf = df_vicidial.filter(
+        (F.col("duracion").isNotNull()) &
+        (F.col("dni_cliente").isNotNull())
+    ).select('dni_cliente','contacto','fecha_llamada','peso','codigo','cod_attempt','q_intentos_telef')
+
+    window_spec = Window.partitionBy("dni_cliente","contacto").orderBy(F.col("peso").asc_nulls_last(),F.col("fecha_llamada").desc())
+    df_mejor_telf = df_mejor_telf.withColumn("n15_mejor_tel", row_number().over(window_spec))
+
+    window_part = Window.partitionBy("dni_cliente","contacto")
+
+    df_mejor_telf = df_mejor_telf.withColumn(
+        "mejor15_codigo_telf",
+        F.max(
+            F.when(F.col("n15_mejor_tel") == 1, F.col("codigo"))
+        ).over(window_part)
+    )
+
+    window_spec = Window.partitionBy("dni_cliente").orderBy(F.col("peso").asc_nulls_last())
+    df_mejor_telf = df_mejor_telf.withColumn("n15_mejor_cli", row_number().over(window_spec))
+
+    window_part = Window.partitionBy("dni_cliente")
+
+    df_mejor_telf = df_mejor_telf.withColumn(
+        "mejor15_codigo_cli",
+        F.max(
+            F.when(F.col("n15_mejor_cli") == 1, F.col("codigo"))
+        ).over(window_part)
+    )
+
+    window_spec = Window.partitionBy("dni_cliente",'contacto').orderBy(F.col("n15_mejor_tel").asc_nulls_last())
+    df_mejor_telf = df_mejor_telf.withColumn("re", row_number().over(window_spec))
+    df_mejor_telf=df_mejor_telf.filter(F.col('re')==1)
+    df_mejor_telf=df_mejor_telf.select('dni_cliente','contacto','mejor15_codigo_cli','mejor15_codigo_telf','cod_attempt','q_intentos_telef')
+    df_tnumeric=df_tnumeric.join(df_mejor_telf,['dni_cliente','contacto'],'left')
+
+    dic_telf = {v: i+1 for i, v in enumerate(listas_tnumeros)}
+
+    mapping_expr = F.create_map([F.lit(x) for x in chain(*dic_telf.items())])
+
+    df_tnumeric = df_tnumeric.withColumn(
+        "indice_tpo_telf",
+        mapping_expr[F.col("tipo_telf")]
+    )
+
+    cod = F.col("mejor15_codigo_telf")
+    attempt = F.col("cod_attempt")
+    phone = F.col("contacto")
+
+    df_tnumeric = df_tnumeric.withColumn(
+        "contacto_02",
+        F.when(cod.isNotNull(), 
+                F.when((cod.isin(ls_una_vez) == False) & cod.isNotNull(), phone)
+                .when(cod.isin(ls_casilla) & (attempt < 3) & cod.isNotNull(), phone)
+                .when(cod.isin(ls_ocupado) & (attempt < 2) & cod.isNotNull(), phone)
+        ).otherwise(phone)
+    )
+
+    df_tnumeric = df_tnumeric.withColumn(
+        "indice_tpo_telf",
+        F.when(F.col("contacto_02").isNotNull(), F.col("indice_tpo_telf"))
+    )
+
+    window_spec = Window.partitionBy("dni_cliente")
+
+    df_tnumeric = df_tnumeric.withColumn(
+        "min_numero",
+        F.min("indice_tpo_telf").over(window_spec)
+    )
+
+    df_tnumeric = df_tnumeric.withColumn(
+        "contacto_04",
+        F.max(
+            F.when((F.col("indice_tpo_telf") == F.col("min_numero")), F.col("contacto"))
+            .otherwise(F.col("contacto_02"))
+        ).over(window_spec)
+    )
+
+    df_tnumeric = df_tnumeric.withColumn(
+        "contacto_02",
+        F.when((F.col("contacto_02").isNull())&(F.col("tipo_telf")=='BBDD CEL01'), F.col("contacto_04")).otherwise(F.col("contacto_02"))
+    ).drop('contacto_04')
+
+    window_spec = Window.partitionBy("dni_cliente").orderBy(F.col("n_mejor_resul").asc_nulls_last())
+    df_vicidial = df_vicidial.withColumn("ref_01", row_number().over(window_spec))
+    df_vicidial = df_vicidial.filter(F.col("ref_01") == 1)
+    df_vicidial=df_vicidial.select('dni_cliente', 'duracion', 'ult_codigo_result', 'fecha_llamada','mejor_codigo_cli','mejor_codigo_cli_dia','dni_ejecutivo','fecha_llamada_1')
+
+        
+    df_lista=df_tnumeric.join(df_base_vigente,['dni_cliente'],'left')
+    df_lista=df_lista.join(df_vicidial,['dni_cliente'],'left')
+    df_lista = df_lista.withColumn("fecha_llamada", col('fecha_llamada_1')).drop('fecha_llamada_1')
+
+    window_spec = Window.orderBy("dni_cliente")
+
+    df_lista = df_lista.withColumn(
+        "dni_unico",
+        dense_rank().over(window_spec)
+    )
+
+    query = f"""
+        SELECT 
+        id_banco as mejor_codigo_cli,
+        nivel_1 as mejor_estado_tipi_cli,
+        nivel_2 as mejor_sub_descripcion,
+        nombre as mejor_descripcion_cli,
+        id as mejor_peso_cli
+        FROM VALENTINA.dbo.{tb_tipolofia}
+        where estado='a'
+        """
+        
+    df_tipi1=obtener_tabla_sql(spark,query,server_sa,user_sa,pwd_sa,db_sa)
+
+    df_tipi2 = df_tipi1.selectExpr(
+        "mejor_codigo_cli as mejor15_codigo_cli",
+        "mejor_estado_tipi_cli as mejor15_estado_tipi_cli",
+        "mejor_descripcion_cli as mejor15_descripcion_cli",
+        "mejor_sub_descripcion as mejor15_sub_descripcion_cli",
+        "mejor_peso_cli as mejor15_peso_cli"
+    )
+
+    df_tipi3 = df_tipi1.selectExpr(
+        "mejor_codigo_cli as mejor15_codigo_telf",
+        "mejor_estado_tipi_cli as mejor15_estado_tipi_telf",
+        "mejor_descripcion_cli as mejor15_descripcion_telf",
+        "mejor_sub_descripcion as mejor15_sub_descripcion_telf",
+        "mejor_peso_cli as mejor15_peso_telf"
+    )
+
+    df_tipi4 = df_tipi1.selectExpr(
+        "mejor_codigo_cli as mejor_codigo_cli_dia",
+        "mejor_estado_tipi_cli as mejor_estado_tipi_cli_dia",
+        "mejor_descripcion_cli as mejor_descripcion_cli_dia",
+        "mejor_sub_descripcion as mejor_sub_descripcion_cli_dia",
+        "mejor_peso_cli as mejor_peso_cli_dia"
+    )
+
+    df_lista=df_lista.join(df_tipi1,['mejor_codigo_cli'],'left')
+    df_lista=df_lista.join(df_tipi2,['mejor15_codigo_cli'],'left')
+    df_lista=df_lista.join(df_tipi3,['mejor15_codigo_telf'],'left')
+    df_lista=df_lista.join(df_tipi4,['mejor_codigo_cli_dia'],'left')
+
+    window_spec = Window.partitionBy('dni_cliente','contacto').orderBy(col("fecha_llamada").desc())
+    df_lista = df_lista.withColumn("ref_01", row_number().over(window_spec))
+    df_lista = df_lista.filter(col("ref_01") == 1).drop('ref_01')
+
+    query = f"""
+        SELECT DISTINCT dni_cliente,contacto,retiro4
+        FROM (
+            SELECT dni_cliente,celular as contacto,
+            case
+                when tipificacion in (4,5) then 'seguimiento -1'
+                else 'no llamar -1'
+            end as retiro4
+            FROM valentina.dbo.alfin_gestion
+            WHERE DNI_ejecutivo!='99999999' 
+            and tipificacion in ('4','5','16','17')
+            and CAST(fecha AS DATE) >= DATEADD(MONTH, -1, CAST('{fecha_mes_base}' AS DATE))
+            AND CAST(fecha AS DATE) < DATEADD(MONTH, 0, CAST('{fecha_mes_base}' AS DATE))
+            UNION ALL
+            SELECT DISTINCT dni_cliente,CELULAR as contacto, 'excluir' as retiro4
+            FROM valentina.dbo.Excluir_Gestion_TARGET where servicio in ('ALFIN','ALFCC')
+        ) t
+        """
+    df_retiro_dni_contacto=obtener_tabla_sql(spark,query,server_sa,user_sa,pwd_sa,db_sa)
+
+    query = f"""
+            SELECT DISTINCT contacto,retiro2
+                FROM (
+                    SELECT celular as contacto,'indecopi' as retiro2 
+                    FROM valentina.dbo.alfin_indecopi where celular is not null
+                    UNION ALL
+                    select CELULAR as contacto,'retiro' as retiro2 from valentina.dbo.alfin_cel_excluir
+                ) t
+            """
+    df_retiro_contacto=obtener_tabla_sql(spark,query,server_sa,user_sa,pwd_sa,db_sa)
+
+    query = f"""
+        SELECT dni as dni_cliente ,'venta' as retiro1
+        FROM VALENTINA.dbo.alfin_ventas 
+        WHERE CAST(fecha AS DATE) >= DATEADD(MONTH, -1, CAST('{fecha_mes_base}' AS DATE))
+        AND CAST(fecha AS DATE) < DATEADD(MONTH, 1, CAST('{fecha_mes_base}' AS DATE))
+        """
+    df_retiro_dni=obtener_tabla_sql(spark,query,server_sa,user_sa,pwd_sa,db_sa)
+
+    df_lista=df_lista.join(df_retiro_dni_contacto,['contacto','dni_cliente'],'left')
+    df_lista=df_lista.join(df_retiro_dni,['dni_cliente'],'left')
+    df_lista=df_lista.join(df_retiro_contacto,['contacto'],'left')
+
+    df_lista = df_lista.withColumn("retiro", when(F.col('retiro1')=='venta','venta')
+                                            .when(F.col('retiro2')=='indecopi','indecopi')
+                                            .when(F.col('retiro2')=='retiro','retiro')
+                                            .when(F.col('retiro4')=='no llamar -1','no volver a llamar')
+                                            .when(F.col('retiro4')=='seguimiento -1','seguimiento')
+                                            .when(F.col('retiro')!='no_aplica',F.col('retiro'))
+                                            .otherwise(F.lit('no aplica'))
+                                            ).drop('retiro1','retiro2')
+    df_lista = df_lista.withColumn("retiro_id", when(F.col('retiro')=='venta',1)
+                                            .when(F.col('retiro')=='indecopi',2)
+                                            .when(F.col('retiro')=='retiro',3)
+                                            .when(F.col('retiro')=='no volver a llamar',4)
+                                            .when(F.col('retiro')=='seguimiento',5)
+                                            .otherwise(F.lit(10))
+                                            )
+
+    df_lista = df_lista.withColumn(
+        "cabecera_carga",
+        F.concat_ws(",", "contacto", "cl_id", 'id_servicio', "nombre_add")
+    ).drop('nombre_add')
+
+    cols_prioridad = [
+        'cabecera_carga','dni_cliente', 'contacto', 'cl_id', 'id_servicio',
+    ]
+
+    window_spec = Window.partitionBy('dni_cliente','contacto').orderBy(col("retiro_id").asc())
+    df_lista = df_lista.withColumn("ref_01", row_number().over(window_spec))
+    df_lista = df_lista.filter(col("ref_01") == 1).drop('ref_01','retiro_id')
+
+    cols_existentes = [c for c in cols_prioridad if c in df_lista.columns]
+
+    cols_restantes = [c for c in df_lista.columns if c not in cols_existentes]
+
+    df_lista = df_lista.select(cols_existentes + cols_restantes)
+    df_lista = df_lista.toDF(*[
+        re.sub(r'[^a-zA-Z0-9_]', '', c)
+        for c in df_lista.columns
+    ])
+    df_lista=df_lista.join(df_venta,['cl_id'],'left')
+    overwrite_table_SQL(spark,df_lista,f'{tlista_generada}',server_sa,user_sa,pwd_sa,'CRONOX')
+    print(f'tabla {tlista_generada} actualizada')
+
+
+
 
 def generar_tb_vigente(spark,fecha_mes_base,t_maestra,t_name_vigente,t_mumeros,cols_drop):
     query=f'''

@@ -114,8 +114,8 @@ def list02_tc_dinners(spark):
 
 def list02_prestamo_dinners(spark):
     fecha_mes_base='2026-05-01'
-    tipi_cond1='DINERS'
-    tipi_cond2='CD'
+    tipi_cond1='PLUS'
+    tipi_cond2='xx'
     tipi_cond3='xx'
     tb_tipolofia='tTipologia_Diners_PPD'
     servidor_01=21
@@ -141,11 +141,15 @@ def list03_alfin(spark):
     tb_tipolofia='ALFin_tipificaciones'
     fecha_mes_base='2026-05-01'
     get_base=since_base_maestra_alfin
-    tlista_generada='borrar_alfin'
-    tb_tnumero='tNumero_alfin_borrar_01'
-    lista_generada_valentina(spark,fecha_mes_base,ls_una_vez,ls_casilla,ls_ocupado,tlista_generada,tb_tipolofia,tb_gestiones,tb_cliente,get_base,tb_tnumero)
+    tlista_generada='borrar_alfin_01'
+    name_campana='alfin'
+    app_campana=12
+    lista_generada_valentina_actual(spark,fecha_mes_base,ls_una_vez,ls_casilla,ls_ocupado,tlista_generada,tb_tipolofia,tb_gestiones,tb_cliente,get_base,name_campana,app_campana)   
+
 
 def list03_credicash(spark):
+   
+   
     ls_una_vez=[]
     ls_casilla=[]
     ls_ocupado=[]
@@ -154,10 +158,12 @@ def list03_credicash(spark):
     tb_tipolofia='ALFcc_tipificaciones'
     fecha_mes_base='2026-05-01'
     get_base=since_base_maestra_alfcc
-    tlista_generada='borrar_credicash'
-    tb_tnumero='tNumero_alfcc_borrar_01'
-    lista_generada_valentina(spark,fecha_mes_base,ls_una_vez,ls_casilla,ls_ocupado,tlista_generada,tb_tipolofia,tb_gestiones,tb_cliente,get_base,tb_tnumero)
+    tlista_generada='borrar_credicash_01'
+    name_campana='alfcc'
+    app_campana=17
+    lista_generada_valentina_actual(spark,fecha_mes_base,ls_una_vez,ls_casilla,ls_ocupado,tlista_generada,tb_tipolofia,tb_gestiones,tb_cliente,get_base,name_campana,app_campana)   
 
+    # lista_generada_valentina(spark,fecha_mes_base,ls_una_vez,ls_casilla,ls_ocupado,tlista_generada,tb_tipolofia,tb_gestiones,tb_cliente,get_base,tb_tnumero)
 
 # fecha_mes_base='2026-05-01'
 # update_tnumeros_valentina(spark,'alfcc_clientes',fecha_mes_base,'tNumero_alfcc_borrar')
@@ -176,10 +182,10 @@ def list03_credicash(spark):
 # list02_negocios_efe(spark)
 # list02_tc_cenco(spark)
 # list02_prestamo_dinners(spark)
-# list02_tc_dinners(spark) 
+list02_tc_dinners(spark) 
 
 # list03_alfin(spark) 
-list03_credicash(spark)
+# list03_credicash(spark)
 
 # biya
 # telemarketing@vensud.com
