@@ -114,7 +114,7 @@ def list02_tc_dinners(spark):
 
 def list02_prestamo_dinners(spark):
     fecha_mes_base='2026-05-01'
-    tipi_cond1='PLUS'
+    tipi_cond1='diners'
     tipi_cond2='xx'
     tipi_cond3='xx'
     tb_tipolofia='tTipologia_Diners_PPD'
@@ -131,7 +131,6 @@ def list02_prestamo_dinners(spark):
     get_base=since_base_maestra_pp_dinners
     lista_generada(spark,fecha_mes_base,tipi_cond1,tipi_cond2,tipi_cond3,tb_tipolofia,servidor_01,tipi_cod,tipi_resp_cod,tipi_descrip,tipi_estado,tipi_resp_estado,tipi_subdescripcion,tnum_tb,tnum_dni,tlista_generada,get_base)
 
-
 def list03_alfin(spark):
     ls_una_vez=[]
     ls_casilla=[]
@@ -145,7 +144,6 @@ def list03_alfin(spark):
     name_campana='alfin'
     app_campana=12
     lista_generada_valentina_actual(spark,fecha_mes_base,ls_una_vez,ls_casilla,ls_ocupado,tlista_generada,tb_tipolofia,tb_gestiones,tb_cliente,get_base,name_campana,app_campana)   
-
 
 def list03_credicash(spark):
    
@@ -177,13 +175,15 @@ def list03_credicash(spark):
 # tb_name_tnum_resultante='tNumero_alfin_borrar_01'
 # pool_tnumeros_valentina(spark,'dni_cliente',tb_name_tnum,tb_name_tnum_resultante)
 
+# list02_consumo_efe(spark)
 
 # list02_prestamo_cenco(spark)
+
 # list02_negocios_efe(spark)
 # list02_tc_cenco(spark)
-# list02_prestamo_dinners(spark)
-list02_tc_dinners(spark) 
 
+list02_tc_dinners(spark) 
+# list02_prestamo_dinners(spark)
 # list03_alfin(spark) 
 # list03_credicash(spark)
 
@@ -192,3 +192,12 @@ list02_tc_dinners(spark)
 # T@RG3T.2025!$pp_dinner_202604151615q
 
 
+# tipis 
+# ventas
+
+# se procesa el histroico generl 
+# la mejor gestion
+
+
+# tmp_llamadas_dinners_5 la mejor
+# tmp_llamada_dinners_ total gestion

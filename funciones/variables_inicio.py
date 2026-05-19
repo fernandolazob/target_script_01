@@ -73,6 +73,59 @@ cross_columns_etk="('vcz01',a.vcz1),('vcz02',a.vcz2),('vcz03',a.vcz3),('vcz04',a
 fecha_ref_etk='fecha_carga'
 dni_etk='dni'
 
+# entonces aqui las campañas actuales
+fuente_dinners_tc='BBDD dinnersTC'
+tb_dinners_tc='base_maestra_diners_tc'
+peso_dinners_tc=1
+cross_columns_dinners_tc="('cel01',a.cel01), ('cel02',a.cel02), ('cel03',a.cel03), ('cel04',a.cel04),('cel05',a.cel05), ('cel06',a.cel06), ('cel07',a.cel07), ('cel08',a.cel08),('cel09',a.cel09), ('cel10',a.cel10)"
+fecha_ref_dinners_tc='fecha_envio'
+dni_dinners_tc='NUMERO_DOCUMENTO'
+
+fuente_dinners_pp='BBDD dinnersPP'
+tb_dinners_pp='base_maestra_diners'
+peso_dinners_pp=2
+cross_columns_dinners_pp = "('cel01',a.cel01), ('cel02',a.cel02), ('cel03',a.cel03), ('cel04',a.cel04), ('cel05',a.cel05), ('cel06',a.cel06), ('cel07',a.cel07), ('cel08',a.cel08)"
+fecha_ref_dinners_pp='fecha_envio'
+dni_dinners_pp='NumDoc'
+
+fuente_cenco_pp='BBDD cencoPP'
+tb_cenco_pp='base_maestra_cencosud_ppff'
+peso_cenco_pp=3
+cross_columns_cenco_pp = "('cel01',a.cel01), ('cel02',a.cel02), ('cel03',a.cel03), ('cel04',a.cel04), ('cel05',a.cel05), ('cel06',a.cel06), ('cel07',a.cel07), ('cel08',a.cel08)"
+fecha_ref_cenco_pp='fecha_envio'
+dni_cenco_pp='CODDOC'
+
+fuente_cenco_tc='BBDD cencotc'
+tb_cenco_tc='base_maestra_cencosud_tc'
+peso_cenco_tc=4
+cross_columns_cenco_tc="('cel01',a.cel01), ('cel02',a.cel02), ('cel03',a.cel03), ('cel04',a.cel04),('cel05',a.cel05), ('cel06',a.cel06), ('cel07',a.cel07), ('cel08',a.cel08)"
+fecha_ref_cenco_tc='fecha_envio'
+dni_cenco_tc='CODDOC'
+
+fuente_efec_consumo='BBDD efe_consumo'
+tb_efec_consumo='base_maestra_efectiva'
+peso_efec_consumo=5
+cross_columns_efec_consumo="""
+('cel01',a.cel01), ('cel02',a.cel02), ('cel03',a.cel03), ('cel04',a.cel04),
+('cel05',a.cel05), ('cel06',a.cel06), ('cel07',a.cel07), ('cel08',a.cel08),
+('cel09',a.cel09), ('cel10',a.cel10), ('cel11',a.cel11), ('cel12',a.cel12),
+('cel13',a.cel13), ('cel14',a.cel14), ('cel15',a.cel15)
+"""
+fecha_ref_efec_consumo='fecha_envio'
+dni_efec_consumo='dni'
+
+fuente_efec_negocio='BBDD efe_negocio'
+tb_efec_negocio='base_maestra_efectiva_negocios'
+peso_efec_negocio=6
+cross_columns_efec_negocio="""
+('cel01',a.cel01), ('cel02',a.cel02), ('cel03',a.cel03), ('cel04',a.cel04),
+('cel05',a.cel05), ('cel06',a.cel06), ('cel07',a.cel07), ('cel08',a.cel08),
+('cel09',a.cel09), ('cel10',a.cel10), ('cel11',a.cel11), ('cel12',a.cel12),
+('cel13',a.cel13), ('cel14',a.cel14), ('cel15',a.cel15)
+"""
+fecha_ref_efec_negocio='fecha_envio'
+dni_efec_negocio='NUMDOCUMENTO'
+
 
 
 fuente_cel='BBDD CEL'
