@@ -114,7 +114,8 @@ def list02_tc_dinners(spark):
 
 def list02_prestamo_dinners(spark):
     fecha_mes_base='2026-05-01'
-    tipi_cond1='diners'
+    # tipi_cond1='diners'
+    tipi_cond1='plus'
     tipi_cond2='xx'
     tipi_cond3='xx'
     tb_tipolofia='tTipologia_Diners_PPD'
@@ -182,10 +183,10 @@ def list03_credicash(spark):
 # list02_negocios_efe(spark)
 # list02_tc_cenco(spark)
 
-list02_tc_dinners(spark) 
 # list02_prestamo_dinners(spark)
+# list02_tc_dinners(spark) 
 # list03_alfin(spark) 
-# list03_credicash(spark)
+list03_credicash(spark)
 
 # biya
 # telemarketing@vensud.com

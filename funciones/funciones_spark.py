@@ -476,7 +476,16 @@ def since_vicidial(spark,fecha_mes_base,tipi_cond1,tipi_cond2,tipi_cond3,tb_tipo
 
 def since_ventas(spark,fecha_mes_base,campana):
     query = f"""
-        select FECHA as fecha_gestion,DNI as vendor_lead_code,PROMOTOR as promotor,ESTADO as estado_venta,TRAMA_HORA as tramo_venta,MONTO as monto_venta,DNIEjecutivo as dni_ejecutivo_venta,Producto as producto_venta,Producto as title,Celular as cel_venta,1 as venta
+        select FECHA as fecha_gestion,DNI as vendor_lead_code,
+        PROMOTOR as promotor,
+        ESTADO as estado_venta,
+        TRAMA_HORA as tramo_venta,
+        MONTO as monto_venta,
+        DNIEjecutivo as dni_ejecutivo_venta,
+        Producto as producto_venta,
+        Producto as title,
+        Celular as cel_venta,1 as venta,
+        subcampana
         from SAMANTHA.dbo.Ventas_Target
         where campana='{campana}'
         and cast(fecha as date) between '{fecha_mes_base}' and EOMONTH('{fecha_mes_base}')
@@ -1075,10 +1084,8 @@ def since_base_maestra_pp_dinners(spark):
             ISNULL(departamento, 'Sin_Departamento') AS last_name,
             nombre_largo AS address1,
 
-            'FEC.EXP.TC' + ' ' +
-            ISNULL(SUBSTRING(fecha_expiracion, 1, 4), ' ') + '-' +
-            ISNULL(SUBSTRING(fecha_expiracion, 5, 2), ' ') + '-' +
-            ' Numcuots: ' + ISNULL(CONVERT(VARCHAR, nrocuotas_rest), ' ')
+			ISNULL('FEC.EXP.TC' +SUBSTRING(fecha_expiracion, 1, 4)+'-'+SUBSTRING(fecha_expiracion, 5, 2), '') + '' +
+            ISNULL('Numcuots: ' + CONVERT(VARCHAR, nrocuotas_rest), ' ')
             AS address2,
 
             'CICLO ' + ISNULL(CONVERT(VARCHAR, ciclo), ' ') +
@@ -1089,51 +1096,42 @@ def since_base_maestra_pp_dinners(spark):
             ISNULL(provincia, '') AS province,
             fecha_expiracion,
 
-            CASE
-            WHEN tea_formato IS NOT NULL AND tea_PPD IS NOT NULL THEN 
-            'TEA' + ' ' + ISNULL(CONVERT(VARCHAR, tea_formato), ' ') +' '+
-            'TEA anterior' + ' ' + ISNULL(CONVERT(VARCHAR, tea_PPD), ' ') +' '+
-            ' TEM ppd ' + ISNULL(CONVERT(VARCHAR, tem_formato), ' ') +' '+
-            'TASA app'+' '+isnull(CONVERT(varchar,tasa_app),' ')
-            WHEN tea_formato IS NOT NULL THEN 
-            'TEA' + ' ' + ISNULL(CONVERT(VARCHAR, tea_formato), ' ') +' '+
-            ' TEM ' + ISNULL(CONVERT(VARCHAR, tem_formato), ' ') +' '+
-            'TASA app'+' '+isnull(CONVERT(varchar,tasa_app),' ')
-            WHEN tea_PPD IS NOT NULL THEN 
-            'TEA anterior' + ' ' + ISNULL(CONVERT(VARCHAR, tea_PPD), ' ') +' '+
-            ' TEM ' + ISNULL(CONVERT(VARCHAR, tem_formato), ' ') +' '+
-            'TASA app'+' '+isnull(CONVERT(varchar,tasa_app),' ')
-            END
+            TRIM(REPLACE(ISNULL('tea' + ' ' +CONVERT(VARCHAR, tea_formato)+', ', '') +' '+
+			ISNULL('tasa_app ' + CONVERT(VARCHAR(50), tasa_app), ''),'  ',' '))
             AS email,
 
-            CASE
-            WHEN saldo_ppd IS NOT NULL  AND Linea_EI_60M IS NOT NULL THEN 
-            'saldo:' + ISNULL(CAST(saldo_ppd AS VARCHAR), '')+' '+ 
-            'Monto:' + ISNULL(CAST(Linea_EI_60M AS VARCHAR), '')+' '+ 
-            'Campaña :' + ISNULL(marca4, 'no tiene')
-            WHEN saldo_ppd IS NOT NULL  THEN 
-            'saldo:' + ISNULL(CAST(saldo_ppd AS VARCHAR), '')+' '+ 
-            'Campaña :' + ISNULL(marca4, 'no tiene')
-            WHEN Linea_EI_60M IS NOT NULL THEN 
-            'Monto:' + ISNULL(CAST(Linea_EI_60M AS VARCHAR), '')+' '+ 
-            'Campaña :' + ISNULL(marca4, 'no tiene')
-            END 
+            TRIM(REPLACE(ISNULL('saldo: ' + CAST(saldo_ppd AS VARCHAR)+' , ', '')+
+            ISNULL('Monto: ' + CAST(Linea_EI_60M AS VARCHAR)+' , ', '')+ 
+            ISNULL('Campaña: ' + marca4, ''),'  ',' '))
             AS security_phrase,
 
-            CASE
-                WHEN MARCA='CD' THEN ',Deuda_BCP: ' + ISNULL(Deuda_BCP,'') +' '+ CHAR(13) + CHAR(10) +
-            ',Deuda_bbva: ' + ISNULL(Deuda_Continental,'') +' '+ CHAR(13) + CHAR(10) +
-            ',Deuda_ibk: ' + ISNULL(Deuda_Interbank,'') +' '+ CHAR(13) + CHAR(10) +
-            ',Deuda_cco: ' + ISNULL(Deuda_ScotiaBank,'') +' '+ CHAR(13) + CHAR(10) +
-            ',Deuda_Falab: ' + ISNULL(Deuda_Otros,'')
-            ELSE 
-                case
-                    when TRY_CAST(REPLACE( LEFT(prioridad_inicial, CHARINDEX('.', prioridad_inicial) - 1) , ' ', '') AS INT) in (4,5) then 'seguro 3%'
-                    else ''
-                end 
-            END
-            AS comments,
+            CONCAT(
+						TRIM(REPLACE(ISNULL('tea_anterior: ' + CONVERT(VARCHAR, tea_PPD)+', ', '') +' '+
+			ISNULL('tasa_prestamo_actual: ' + CONVERT(VARCHAR(50), TASA_MACRO)+', ', '') + ' ' +
+			ISNULL('tem_ppd: ' +CONVERT(VARCHAR, tem_formato)+', ', ''),'  ',' '))+
+                ' ',
+                CASE
+                    WHEN MARCA = 'CD' THEN 
+                        ',Deuda_BCP: ' + ISNULL(CONVERT(VARCHAR(50), Deuda_BCP), '') + CHAR(13) + CHAR(10) +
+                        ',Deuda_bbva: ' + ISNULL(CONVERT(VARCHAR(50), Deuda_Continental), '') + CHAR(13) + CHAR(10) +
+                        ',Deuda_ibk: ' + ISNULL(CONVERT(VARCHAR(50), Deuda_Interbank), '') + CHAR(13) + CHAR(10) +
+                        ',Deuda_cco: ' + ISNULL(CONVERT(VARCHAR(50), Deuda_ScotiaBank), '') + CHAR(13) + CHAR(10) +
+                        ',Deuda_Falab: ' + ISNULL(CONVERT(VARCHAR(50), Deuda_Otros), '')
 
+                    ELSE 
+                        CASE
+                            WHEN TRY_CAST(
+                                REPLACE(
+                                    LEFT(prioridad_inicial, CHARINDEX('.', prioridad_inicial + '.') - 1),
+                                    ' ',
+                                    ''
+                                ) AS INT
+                            ) IN (4,5)
+                            THEN 'seguro 3%'
+                            ELSE ''
+                        END
+                END
+            ) AS comments,
             TRY_CAST(
                 REPLACE(
                     NULLIF(REPLACE(TRIM(Deuda_BCP), '-', ''), ''),
@@ -1232,6 +1230,7 @@ def since_base_maestra_pp_dinners(spark):
             rpioridadvocales,
             estado_tarjeta,
             distrito_lab,
+            tasa_macro,
             TRY_CAST(
                 REPLACE(
                     NULLIF(REPLACE(TRIM(tea_ppd), '%', ''), ''),
@@ -1258,312 +1257,6 @@ def since_base_maestra_pp_dinners(spark):
             END AS retiro,
 
             nombre_producto
-
-        FROM DANTALION.dbo.Base_Maestra_Diners_Vigente
-        """
-    df_base = obtener_tabla_sql(spark, query, server_kishin, user_kishin, pwd_kishin, db_kishin)
-
-    df_base = df_base.withColumn(
-        "monto_deuda_max",
-        greatest(
-            F.col("deuda_bcp"), F.col("deuda_continental"), F.col("deuda_scotiaBank"), F.col("deuda_interbank"),
-            F.col("deuda_otros")
-        )
-    )
-
-    df_base = df_base.withColumn(
-        "deuda_bench",
-        F.when(F.col("monto_deuda_max") == F.col("deuda_bcp"), "deuda_bcp")
-        .when(F.col("monto_deuda_max") == F.col("deuda_continental"), "deuda_continental")
-        .when(F.col("monto_deuda_max") == F.col("deuda_scotiaBank"), "deuda_scotiaBank")
-        .when(F.col("monto_deuda_max") == F.col("deuda_interbank"), "deuda_interbank")
-        .when(F.col("monto_deuda_max") == F.col("deuda_otros"), "deuda_otros")
-        .otherwise("OTROS")
-    )
-
-    df_base = df_base.withColumn(
-        "seg_edad",
-        F.when((F.floor(F.months_between(F.current_date(), F.col("fec_nac"))/12) >= 20) &
-            (F.floor(F.months_between(F.current_date(), F.col("fec_nac"))/12) < 30), "a. 20 A 30")
-        .when((F.floor(F.months_between(F.current_date(), F.col("fec_nac"))/12) >= 30) &
-            (F.floor(F.months_between(F.current_date(), F.col("fec_nac"))/12) < 40), "b. 30 A 40")
-        .when((F.floor(F.months_between(F.current_date(), F.col("fec_nac"))/12) >= 40) &
-            (F.floor(F.months_between(F.current_date(), F.col("fec_nac"))/12) < 50), "c. 40 A 50")
-        .when((F.floor(F.months_between(F.current_date(), F.col("fec_nac"))/12) >= 50) &
-            (F.floor(F.months_between(F.current_date(), F.col("fec_nac"))/12) < 60), "d. 50 A 60")
-        .when((F.floor(F.months_between(F.current_date(), F.col("fec_nac"))/12) >= 60) &
-            (F.floor(F.months_between(F.current_date(), F.col("fec_nac"))/12) < 76), "e. 60 A 70")
-        .otherwise('f. Otros')
-    )
-
-    df_base = df_base.withColumn(
-        "mes_entrega_dif",
-        F.floor(
-            F.months_between(
-                F.current_date(),
-                F.col("mes_entrega")
-            )
-        )
-    )
-
-    df_base = df_base.withColumn(
-        "seg_saldo_ppd",
-        F.when(F.col("saldo_ppd") < 10000, "a. [0,10k)")
-        .when((F.col("saldo_ppd") >= 10000) & (F.col("saldo_ppd") < 20000), "b. [10k,20k)")
-        .when((F.col("saldo_ppd") >= 20000) & (F.col("saldo_ppd") < 30000), "c. [20k,30k)")
-        .when((F.col("saldo_ppd") >= 30000) & (F.col("saldo_ppd") < 40000), "d. [30k,40k)")
-        .when((F.col("saldo_ppd") >= 40000) & (F.col("saldo_ppd") < 50000), "e. [40k,50k)")
-        .when((F.col("saldo_ppd") >= 50000) & (F.col("saldo_ppd") < 60000), "f. [50k,60k)")
-        .when((F.col("saldo_ppd") >= 60000) & (F.col("saldo_ppd") < 70000), "g. [60k,70k)")
-        .when((F.col("saldo_ppd") >= 70000) & (F.col("saldo_ppd") < 80000), "h. [70k,80k)")
-        .when((F.col("saldo_ppd") >= 80000) & (F.col("saldo_ppd") < 90000), "i. [80k,90k)")
-        .when(F.col("saldo_ppd") >= 90000, "j. [90k,+)")
-        .otherwise("z. otros")
-    )
-
-    df_base = df_base.withColumn(
-        "seg_tea_formato",
-        F.when(F.col("tea_formato") < 0.10, "a. [0%,10%)")
-        .when((F.col("tea_formato") >= 0.10) & (F.col("tea_formato") < 0.15), "b. [10%,15%)")
-        .when((F.col("tea_formato") >= 0.15) & (F.col("tea_formato") < 0.20), "c. [15%,20%)")
-        .when((F.col("tea_formato") >= 0.20) & (F.col("tea_formato") < 0.25), "d. [20%,25%)")
-        .when((F.col("tea_formato") >= 0.25) & (F.col("tea_formato") < 0.30), "e. [25%,30%)")
-        .when((F.col("tea_formato") >= 0.30) & (F.col("tea_formato") < 0.35), "f. [30%,35%)")
-        .when((F.col("tea_formato") >= 0.35) & (F.col("tea_formato") < 0.40), "g. [35%,40%)")
-        .when((F.col("tea_formato") >= 0.40) & (F.col("tea_formato") < 0.45), "h. [40%,45%)")
-        .when(F.col("tea_formato") >= 0.45, "i. [45%,+)")
-        .otherwise("z. otros")
-    )
-
-    df_base = df_base.withColumn(
-        'edad',
-        F.floor(F.months_between(F.current_date(), F.col("fec_nac")) / 12)
-    )
-     
-    df_base = df_base.withColumn(
-        "seg_tem_formato",
-        F.when(F.col("tem_formato") < 0.01, "a. [0%,1%)")
-        .when((F.col("tem_formato") >= 0.01) & (F.col("tem_formato") < 0.015), "b. [1%,1.5%)")
-        .when((F.col("tem_formato") >= 0.015) & (F.col("tem_formato") < 0.02), "c. [1.5%,2%)")
-        .when((F.col("tem_formato") >= 0.02) & (F.col("tem_formato") < 0.025), "d. [2%,2.5%)")
-        .when((F.col("tem_formato") >= 0.025) & (F.col("tem_formato") < 0.03), "e. [2.5%,3%)")
-        .when(F.col("tem_formato") >= 0.03, "f. [3%,+)")
-        .otherwise("z. otros")
-    )
-
-    df_base = df_base.withColumn(
-        "seg_tasa_app",
-        F.when(F.col("tasa_app") < 0.10, "a. [0%,10%)")
-        .when((F.col("tasa_app") >= 0.10) & (F.col("tasa_app") < 0.15), "b. [10%,15%)")
-        .when((F.col("tasa_app") >= 0.15) & (F.col("tasa_app") < 0.20), "c. [15%,20%)")
-        .when((F.col("tasa_app") >= 0.20) & (F.col("tasa_app") < 0.25), "d. [20%,25%)")
-        .when((F.col("tasa_app") >= 0.25) & (F.col("tasa_app") < 0.30), "e. [25%,30%)")
-        .when((F.col("tasa_app") >= 0.30) & (F.col("tasa_app") < 0.35), "f. [30%,35%)")
-        .when((F.col("tasa_app") >= 0.35) & (F.col("tasa_app") < 0.40), "g. [35%,40%)")
-        .when(F.col("tasa_app") >= 0.40, "h. [40%,+)")
-        .otherwise("z. otros")
-    )
-
-    return df_base.withColumn(
-        "vendor_lead_code",
-        F.right(
-            F.concat(F.lit("00000000"), F.col("vendor_lead_code")),
-            F.lit(8)
-        )
-    )
-
-def since_base_maestra_pp_dinners_recepcion(spark):
-    query = f"""
-        SELECT
-            NumDoc AS vendor_lead_code,
-            marca AS title,
-            ISNULL(nombre_producto, '') AS first_name,
-            ISNULL(departamento, 'Sin_Departamento') AS last_name,
-            nombre_largo AS address1,
-
-            'FEC.EXP.TC' + ' ' +
-            ISNULL(SUBSTRING(fecha_expiracion, 1, 4), ' ') + '-' +
-            ISNULL(SUBSTRING(fecha_expiracion, 5, 2), ' ') + '-' +
-            ' Numcuots: ' + ISNULL(CONVERT(VARCHAR, nrocuotas_rest), ' ')
-            AS address2,
-
-            'CICLO ' + ISNULL(CONVERT(VARCHAR, ciclo), ' ') +
-            ' nro_tc:' + ISNULL(nro_tarjeta, '')
-            AS address3,
-
-            ISNULL(distrito, '') AS city,
-            ISNULL(provincia, '') AS province,
-            fecha_expiracion,
-
-            CASE
-            WHEN tea_formato IS NOT NULL AND tea_PPD IS NOT NULL THEN 
-            'TEA' + ' ' + ISNULL(CONVERT(VARCHAR, tea_formato), ' ') +' '+
-            'TEA anterior' + ' ' + ISNULL(CONVERT(VARCHAR, tea_PPD), ' ') +' '+
-            ' TEM ppd ' + ISNULL(CONVERT(VARCHAR, tem_formato), ' ') +' '+
-            'TASA app'+' '+isnull(CONVERT(varchar,tasa_app),' ')
-            WHEN tea_formato IS NOT NULL THEN 
-            'TEA' + ' ' + ISNULL(CONVERT(VARCHAR, tea_formato), ' ') +' '+
-            ' TEM ' + ISNULL(CONVERT(VARCHAR, tem_formato), ' ') +' '+
-            'TASA app'+' '+isnull(CONVERT(varchar,tasa_app),' ')
-            WHEN tea_PPD IS NOT NULL THEN 
-            'TEA anterior' + ' ' + ISNULL(CONVERT(VARCHAR, tea_PPD), ' ') +' '+
-            ' TEM ' + ISNULL(CONVERT(VARCHAR, tem_formato), ' ') +' '+
-            'TASA app'+' '+isnull(CONVERT(varchar,tasa_app),' ')
-            END
-            AS email,
-            CASE
-            WHEN saldo_ppd IS NOT NULL  AND Linea_EI_60M IS NOT NULL THEN 
-            'saldo:' + ISNULL(CAST(saldo_ppd AS VARCHAR), '')+' '+ 
-            'Monto:' + ISNULL(CAST(Linea_EI_60M AS VARCHAR), '')+' '+ 
-            'Campaña :' + ISNULL(marca4, 'no tiene')
-            WHEN saldo_ppd IS NOT NULL  THEN 
-            'saldo:' + ISNULL(CAST(saldo_ppd AS VARCHAR), '')+' '+ 
-            'Campaña :' + ISNULL(marca4, 'no tiene')
-            WHEN Linea_EI_60M IS NOT NULL THEN 
-            'Monto:' + ISNULL(CAST(Linea_EI_60M AS VARCHAR), '')+' '+ 
-            'Campaña :' + ISNULL(marca4, 'no tiene')
-            END 
-            AS security_phrase,
-            CEL01,CEL02,
-
-            CASE
-                WHEN MARCA='CD' THEN ',Deuda_BCP: ' + ISNULL(Deuda_BCP,'') +' '+ CHAR(13) + CHAR(10) +
-            ',Deuda_bbva: ' + ISNULL(Deuda_Continental,'') +' '+ CHAR(13) + CHAR(10) +
-            ',Deuda_ibk: ' + ISNULL(Deuda_Interbank,'') +' '+ CHAR(13) + CHAR(10) +
-            ',Deuda_cco: ' + ISNULL(Deuda_ScotiaBank,'') +' '+ CHAR(13) + CHAR(10) +
-            ',Deuda_Falab: ' + ISNULL(Deuda_Otros,'')
-            ELSE 
-                case
-                    when TRY_CAST(REPLACE( LEFT(prioridad_inicial, CHARINDEX('.', prioridad_inicial) - 1) , ' ', '') AS INT) in (4,5) then 'seguro 3%'
-                    else ''
-                end 
-            END
-            AS comments,
-
-            TRY_CAST(
-                REPLACE(
-                    NULLIF(REPLACE(TRIM(Deuda_BCP), '-', ''), ''),
-                    ',', '.'
-                ) AS FLOAT
-            ) AS deuda_bcp,
-
-            TRY_CAST(
-                REPLACE(
-                    NULLIF(REPLACE(TRIM(Deuda_Continental), '-', ''), ''),
-                    ',', '.'
-                ) AS FLOAT
-            ) AS deuda_continental,
-
-            TRY_CAST(
-                REPLACE(
-                    NULLIF(REPLACE(TRIM(Deuda_ScotiaBank), '-', ''), ''),
-                    ',', '.'
-                ) AS FLOAT
-            ) AS deuda_scotiaBank,
-
-            TRY_CAST(
-                REPLACE(
-                    NULLIF(REPLACE(TRIM(Deuda_Interbank), '-', ''), ''),
-                    ',', '.'
-                ) AS FLOAT
-            ) AS deuda_interbank,
-
-            TRY_CAST(
-                REPLACE(
-                    NULLIF(REPLACE(TRIM(Deuda_Otros), '-', ''), ''),
-                    ',', '.'
-                ) AS FLOAT
-            ) AS deuda_otros,
-
-            TRY_CAST(
-                REPLACE(
-                    NULLIF(REPLACE(TRIM(saldo_ppd), '-', ''), ''),
-                    ',', '.'
-                ) AS FLOAT
-            ) AS saldo_ppd,
-
-            CONVERT(DATE, CAST(FechaNacimiento AS VARCHAR(8))) AS fec_nac,
-            TRIM(estadocivil) AS estadocivil,
-
-            TRY_CAST(
-                REPLACE(
-                    NULLIF(REPLACE(TRIM(tea_formato), '%', ''), ''),
-                    ',', '.'
-                ) AS DECIMAL(10,4)
-            ) / 100 AS tea_formato,
-
-            TRY_CAST(
-                REPLACE(
-                    NULLIF(REPLACE(TRIM(tem_formato), '%', ''), ''),
-                    ',', '.'
-                ) AS DECIMAL(10,4)
-            ) / 100 AS tem_formato,
-
-            nacionalidad,
-            Flag_entrega,
-
-            CASE
-                WHEN mes_entrega IS NOT NULL AND mes_entrega <> 0
-                    THEN CONVERT(DATE, CAST(mes_entrega AS VARCHAR(6)) + '01')
-                ELSE NULL
-            END AS mes_entrega,
-
-            TRY_CAST(REPLACE( LEFT(prioridad_inicial, CHARINDEX('.', prioridad_inicial) - 1) , ' ', '') AS INT) AS prioridad_inicial,
-
-            ciclo,
-            flg_segmento_digital,
-
-            TRY_CAST(
-                REPLACE(
-                    NULLIF(REPLACE(TRIM(tasa_app), '-', ''), ''),
-                    ',', '.'
-                ) AS FLOAT
-            ) / 100 AS tasa_app,
-
-            oferppd,
-            oferppdplus,
-            oferds,
-            oferbt,
-            marca2,
-            marca3 as recurrencia_digital,
-            marca4 as clave_web,
-            recencia,
-            linea_ei_60m,
-            oferta_disef,
-            oferta_ppd,
-            tasappd,
-            nrocuotas_rest,
-            cargo,
-            profesion,
-            rpioridadvocales,
-            estado_tarjeta,
-            distrito_lab,
-            TRY_CAST(
-                REPLACE(
-                    NULLIF(REPLACE(TRIM(tea_ppd), '%', ''), ''),
-                    ',', '.'
-                ) AS DECIMAL(10,4)
-            ) / 100 AS tea_ppd,
-            TRY_CAST(
-                REPLACE(
-                    NULLIF(REPLACE(TRIM(Linea_EI_60M), '-', ''), ''),
-                    ',', '.'
-                ) AS FLOAT
-            ) AS monto_ppd,
-            CASE
-                WHEN rep1 = 1 THEN 'stock'
-                ELSE 'nuevo'
-            END AS rep,
-
-            fecha_envio,
-            flag_adicion,
-
-            CASE
-                WHEN LEN(REPLACE(retiro, ' ', '')) > 3 THEN LOWER(REPLACE(retiro, ' ', '_'))
-                ELSE 'no_aplica'
-            END AS retiro,
-
-            nombre_producto,TELF1,TELF2
 
         FROM DANTALION.dbo.Base_Maestra_Diners_Vigente
         """
@@ -2048,8 +1741,6 @@ def pool_tnumeros_valentina(spark,dni_valentina,tb_Numero,tb_name_tnum):
     )
     overwrite_table_SQL(spark,df_ref01,f'{tb_name_tnum}',server_kishin,user_kishin,pwd_kishin,db_kishin)
 
-
-
 def since_base_maestra_alfin(spark,fecha_mes_base):
     cl_base1 = fecha_a_nombre(fecha_mes_base)
 
@@ -2530,6 +2221,8 @@ def lista_generada(spark,fecha_mes_base,tipi_cond1,tipi_cond2,tipi_cond3,tb_tipo
     overwrite_table_SQL(spark,df_lista,f'{tlista_generada}',server_sa,user_sa,pwd_sa,'CRONOX')
     print(f'tabla {tlista_generada} actualizada')
 
+
+
 def lista_generada_valentina(spark,fecha_mes_base,ls_una_vez,ls_casilla,ls_ocupado,tlista_generada,tb_tipolofia,tb_gestiones,tb_cliente,get_base,tb_tnumero):
 
     df_vicidial=since_valentina(spark,fecha_mes_base,tb_tipolofia,tb_gestiones)
@@ -2785,7 +2478,6 @@ def lista_generada_valentina(spark,fecha_mes_base,ls_una_vez,ls_casilla,ls_ocupa
     overwrite_table_SQL(spark,df_lista,f'{tlista_generada}',server_sa,user_sa,pwd_sa,'CRONOX')
     print(f'tabla {tlista_generada} actualizada')
 
-
 def lista_generada_valentina_actual(spark,fecha_mes_base,ls_una_vez,ls_casilla,ls_ocupado,tlista_generada,tb_tipolofia,tb_gestiones,tb_cliente,get_base,name_campana,app_campana):
 
     ventas_valentina_mes(name_campana,fecha_mes_base,user_valentina,pwd_valentina,server_valentina,port_mysql,db_valentina)
@@ -3039,8 +2731,6 @@ def lista_generada_valentina_actual(spark,fecha_mes_base,ls_una_vez,ls_casilla,l
     df_lista=df_lista.join(df_venta,['cl_id'],'left')
     overwrite_table_SQL(spark,df_lista,f'{tlista_generada}',server_sa,user_sa,pwd_sa,'CRONOX')
     print(f'tabla {tlista_generada} actualizada')
-
-
 
 
 def generar_tb_vigente(spark,fecha_mes_base,t_maestra,t_name_vigente,t_mumeros,cols_drop):
