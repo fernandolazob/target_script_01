@@ -15,14 +15,14 @@ spark = SparkSession.builder \
     .getOrCreate()
 
 def list02_prestamo_cenco(spark):
-    fecha_mes_base='2026-05-01'
+    fecha_mes_base='2026-06-01'
     tipi_cond1='SAE'
     tipi_cond2='SAR'
     tipi_cond3='AGENDA'
     tb_tipolofia='tTipologia_Cencosud_PPFF'
     servidor_01=76
     tipi_cod='Codigo'
-    tipi_resp_cod='R'
+    tipi_resp_cod='R0'
     tipi_descrip='DESCRIPCION'
     tipi_estado='tipo'
     tipi_resp_estado='NO GESTIONADO'
@@ -35,14 +35,14 @@ def list02_prestamo_cenco(spark):
     lista_generada(spark,fecha_mes_base,tipi_cond1,tipi_cond2,tipi_cond3,tb_tipolofia,servidor_01,tipi_cod,tipi_resp_cod,tipi_descrip,tipi_estado,tipi_resp_estado,tipi_subdescripcion,tnum_tb,tnum_dni,tlista_generada,get_base)
 
 def list02_tc_cenco(spark):
-    fecha_mes_base='2026-05-01'
+    fecha_mes_base='2026-06-01'
     tipi_cond1='CENCOSUD_TC'
     tipi_cond2='xx'
     tipi_cond3='xx'
     tb_tipolofia='tTipologia_Cencosud_TC'
     servidor_01=76
     tipi_cod='Codigo'
-    tipi_resp_cod='R'
+    tipi_resp_cod='R0'
     tipi_descrip='DESCRIPCION'
     tipi_estado='tipo'
     tipi_resp_estado='NO GESTIONADO'
@@ -55,53 +55,53 @@ def list02_tc_cenco(spark):
     lista_generada(spark,fecha_mes_base,tipi_cond1,tipi_cond2,tipi_cond3,tb_tipolofia,servidor_01,tipi_cod,tipi_resp_cod,tipi_descrip,tipi_estado,tipi_resp_estado,tipi_subdescripcion,tnum_tb,tnum_dni,tlista_generada,get_base)
 
 def list02_consumo_efe(spark):
-    fecha_mes_base='2026-05-01'
+    fecha_mes_base='2026-06-01'
     tipi_cond1='EFECTIVA_NC'
     tipi_cond2='xx'
     tipi_cond3='xx'
     tb_tipolofia='tTipologia_Efectiva'
     servidor_01=7
     tipi_cod='Codigo'
-    tipi_resp_cod='B'
+    tipi_resp_cod='B0'
     tipi_descrip='DESCRIPCION'
     tipi_estado='tipo'
     tipi_resp_estado='NO CONTACTO'
     tipi_subdescripcion='SUB_DESCRIPCION'
     tnum_tb='tNumeroEfectiva'
     tnum_dni='DNI'
-    tlista_generada='borrar_consumo_efe'
+    tlista_generada='borrar_efe_consumo'
     get_base=since_base_maestra_efe_consumo
     lista_generada(spark,fecha_mes_base,tipi_cond1,tipi_cond2,tipi_cond3,tb_tipolofia,servidor_01,tipi_cod,tipi_resp_cod,tipi_descrip,tipi_estado,tipi_resp_estado,tipi_subdescripcion,tnum_tb,tnum_dni,tlista_generada,get_base)
 
 def list02_negocios_efe(spark):
-    fecha_mes_base='2026-05-01'
+    fecha_mes_base='2026-06-01'
     tipi_cond1='EFECTIVA_NEGOCIOS'
     tipi_cond2='xx'
     tipi_cond3='xx'
     tb_tipolofia='tTipologia_Efectiva'
     servidor_01=64
     tipi_cod='Codigo'
-    tipi_resp_cod='B'
+    tipi_resp_cod='B0'
     tipi_descrip='DESCRIPCION'
     tipi_estado='tipo'
     tipi_resp_estado='NO CONTACTO'
     tipi_subdescripcion='SUB_DESCRIPCION'
     tnum_tb='tNumeroEfectivaNegocios'
     tnum_dni='NUMDOCUMENTO'
-    tlista_generada='borrar_negocio_efe'
+    tlista_generada='borrar_efec_negocios'
     get_base=since_base_maestra_efe_negocio
 
     lista_generada(spark,fecha_mes_base,tipi_cond1,tipi_cond2,tipi_cond3,tb_tipolofia,servidor_01,tipi_cod,tipi_resp_cod,tipi_descrip,tipi_estado,tipi_resp_estado,tipi_subdescripcion,tnum_tb,tnum_dni,tlista_generada,get_base)
 
 def list02_tc_dinners(spark):
-    fecha_mes_base='2026-05-01'
+    fecha_mes_base='2026-06-01'
     tipi_cond1='DINERS TC'
     tipi_cond2='xx'
     tipi_cond3='xx'
     tb_tipolofia='tTipologia_Diners_TC'
     servidor_01=21
     tipi_cod='cod'
-    tipi_resp_cod='H'
+    tipi_resp_cod='E0'
     tipi_descrip='[NIVEL 4]'
     tipi_estado='[NIVEL 2]'
     tipi_resp_estado='NO CONTACTO'
@@ -113,22 +113,23 @@ def list02_tc_dinners(spark):
     lista_generada(spark,fecha_mes_base,tipi_cond1,tipi_cond2,tipi_cond3,tb_tipolofia,servidor_01,tipi_cod,tipi_resp_cod,tipi_descrip,tipi_estado,tipi_resp_estado,tipi_subdescripcion,tnum_tb,tnum_dni,tlista_generada,get_base)
 
 def list02_prestamo_dinners(spark):
-    fecha_mes_base='2026-05-01'
-    # tipi_cond1='diners'
-    tipi_cond1='plus'
+    fecha_mes_base='2026-06-01'
+    tipi_cond1='diners'
+    # tipi_cond1='plus'
     tipi_cond2='xx'
     tipi_cond3='xx'
     tb_tipolofia='tTipologia_Diners_PPD'
     servidor_01=21
     tipi_cod='cod'
-    tipi_resp_cod='P'
+    tipi_resp_cod='C0'
     tipi_descrip='[NIVEL 4]'
     tipi_estado='[NIVEL 2]'
     tipi_resp_estado='NO CONTACTO'
     tipi_subdescripcion='[NIVEL 3]'
     tnum_tb='tNumeroDiners'
     tnum_dni='NumDoc'
-    tlista_generada='borrar_prestamo_dinner'
+
+    tlista_generada='borrar_prestamo_diner'
     get_base=since_base_maestra_pp_dinners
     lista_generada(spark,fecha_mes_base,tipi_cond1,tipi_cond2,tipi_cond3,tb_tipolofia,servidor_01,tipi_cod,tipi_resp_cod,tipi_descrip,tipi_estado,tipi_resp_estado,tipi_subdescripcion,tnum_tb,tnum_dni,tlista_generada,get_base)
 
@@ -139,7 +140,7 @@ def list03_alfin(spark):
     tb_gestiones='alfin_gestion'
     tb_cliente='alfin_clientes'
     tb_tipolofia='ALFin_tipificaciones'
-    fecha_mes_base='2026-05-01'
+    fecha_mes_base='2026-06-01'
     get_base=since_base_maestra_alfin
     tlista_generada='borrar_alfin_01'
     name_campana='alfin'
@@ -155,7 +156,7 @@ def list03_credicash(spark):
     tb_gestiones='alfcc_gestion'
     tb_cliente='alfcc_clientes'
     tb_tipolofia='ALFcc_tipificaciones'
-    fecha_mes_base='2026-05-01'
+    fecha_mes_base='2026-06-01'
     get_base=since_base_maestra_alfcc
     tlista_generada='borrar_credicash_01'
     name_campana='alfcc'
@@ -176,17 +177,16 @@ def list03_credicash(spark):
 # tb_name_tnum_resultante='tNumero_alfin_borrar_01'
 # pool_tnumeros_valentina(spark,'dni_cliente',tb_name_tnum,tb_name_tnum_resultante)
 
-# list02_consumo_efe(spark)
 
-# list02_prestamo_cenco(spark)
-
-# list02_negocios_efe(spark)
 # list02_tc_cenco(spark)
 
+# list02_consumo_efe(spark)
 # list02_prestamo_dinners(spark)
-# list02_tc_dinners(spark) 
+list02_tc_dinners(spark) 
+# list02_negocios_efe(spark)
+# list02_prestamo_cenco(spark)
 # list03_alfin(spark) 
-list03_credicash(spark)
+# list03_credicash(spark)
 
 # biya
 # telemarketing@vensud.com
@@ -198,7 +198,6 @@ list03_credicash(spark)
 
 # se procesa el histroico generl 
 # la mejor gestion
-
 
 # tmp_llamadas_dinners_5 la mejor
 # tmp_llamada_dinners_ total gestion

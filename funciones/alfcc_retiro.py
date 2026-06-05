@@ -4,8 +4,6 @@ from sqlalchemy import create_engine
 
 filename_retiro_telef='blacklist_celulares.txt'
 
-
-
 port_mysql = '3306'
 user_valentina = "flazo"
 pwd_valentina = "T4rg3t2026$$"

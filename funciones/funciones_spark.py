@@ -374,7 +374,7 @@ def since_vicidial(spark,fecha_mes_base,tipi_cond1,tipi_cond2,tipi_cond3,tb_tipo
             when {tipi_cod}='CALLBK' then 1200
             else peso 
         end as peso  FROM [ODIN].[dbo].{tb_tipolofia}
-        where LEFT({tipi_cod},1)='{tipi_resp_cod}' or {tipi_estado}='{tipi_resp_estado}' or {tipi_cod}='CALLBK'
+        where LEFT({tipi_cod},2)='{tipi_resp_cod}' or {tipi_estado}='{tipi_resp_estado}' or {tipi_cod}='CALLBK'
         """
     df_tipi=obtener_tabla_sql(spark,query,server_zeus,user_zeus,pwd_zeus,db_zeus)
 
@@ -709,74 +709,74 @@ def since_base_maestra_cencosud_tc(spark):
 
 def since_base_maestra_efe_consumo(spark):
     query = """
-    select        
-        ROW_NUMBER() OVER (ORDER BY (SELECT NULL)) AS indice,
-        tipocliente as first_name,
-        isnull(departamento,'Sin_Departamento') as last_name,
-        cliente as address1,        
-        'EMP1='+empresa1+'/ EMP2='+empresa2+'/ EMP3='+ empresa3 as address3,     
-        empresa1,
-        empresa2,
-        empresa3,
-        direccion as comments_2,        
-        dni as vendor_lead_code,        
-        ISNULL(provincia,'') as province,        
-        distrito as city,        
-        'COD_AGENCIA ='+codigo_agencia as email,   
-        agencia,     
-        ('LINEA_EXPRESS'+' '+isnull(linea_ft,'')+'//'+'LINEA_ESCRITORIO'+' '+isnull(linea_hs_rs,'')+'//'+'LINEA_SEMIFULL'+' '+isnull(linea_hs_plus,'')+'//'+'LINEA_FULL'+' '+isnull(linea_full,'')) as comments,        
-        linea_acotada as oferta,        
-        marca2 as tip_prioridad,     
-        marca_2025,        
-        nomcomercial,        
-        perfil_ic,        
-        tipoingreso,        
-        asignacion,     
-        TRY_CAST(
-                REPLACE(linea_ft, '''', '')
-            AS FLOAT) as linea_ft,    
-        TRY_CAST(
-                REPLACE(linea_hs_rs, '''', '')
-            AS FLOAT) as linea_hs_rs,
-        TRY_CAST(
-                REPLACE(linea_hs_plus, '''', '')
-            AS FLOAT) AS linea_hs_plus, 
-        linea_full,   
-        case when rep1=1 then 'stock' else 'nuevo' end as marca,        
-        perfil,
-        segmento,        
-        zona,        
-        fecha_envio,          
-        case
-            when len(replace(retiro,' ',''))>3  then lower(replace(retiro,' ','_'))
-            else 'no_aplica'
-        end as retiro,   
-        cast(replace(tasa,'NULL','') as float)/100.0 as tasa,
-        cast(replace(score,'NULL','') as int) as score,
-        rep1,
-        case 
-            when isnull(provincia,'') = '' then 'leads sin región'  
-            when provincia in ('lima','callao') then 'leads lima'  
-            else 'leads provincia' 
-        end as region, 
-        marca as marcadesbase,
-        marca2,
-        flgsubproceso_hs,
-        situacionlaboral         
-    from dantalion.dbo.base_maestra_efectiva_vigente
-    """
+        select        
+            ROW_NUMBER() OVER (ORDER BY (SELECT NULL)) AS indice,
+            tipocliente as first_name,
+            isnull(departamento,'Sin_Departamento') as last_name,
+            cliente as address1,        
+            'EMP1='+empresa1+'/ EMP2='+empresa2+'/ EMP3='+ empresa3 as address3,     
+            empresa1,
+            empresa2,
+            empresa3,
+            direccion as comments_2,        
+            dni as vendor_lead_code,        
+            ISNULL(provincia,'') as province,        
+            distrito as city,        
+            'COD_AGENCIA ='+codigo_agencia as email,   
+            agencia,     
+            ('LINEA_EXPRESS'+' '+isnull(linea_ft,'')+'//'+'LINEA_ESCRITORIO'+' '+isnull(linea_hs_rs,'')+'//'+'LINEA_SEMIFULL'+' '+isnull(linea_hs_plus,'')+'//'+'LINEA_FULL'+' '+isnull(linea_full,'')) as comments,        
+            linea_acotada as oferta,        
+            marca2 as tip_prioridad,     
+            marca_2025,        
+            nomcomercial,        
+            perfil_ic,        
+            tipoingreso,        
+            asignacion,     
+            TRY_CAST(
+                    REPLACE(linea_ft, '''', '')
+                AS FLOAT) as linea_ft,    
+            TRY_CAST(
+                    REPLACE(linea_hs_rs, '''', '')
+                AS FLOAT) as linea_hs_rs,
+            TRY_CAST(
+                    REPLACE(linea_hs_plus, '''', '')
+                AS FLOAT) AS linea_hs_plus, 
+            linea_full,   
+            case when rep1=1 then 'stock' else 'nuevo' end as marca,        
+            perfil,
+            segmento,        
+            zona,        
+            fecha_envio, 
+            cast(replace(tasa,'NULL','') as float)/100.0 as tasa,
+            cast(replace(score,'NULL','') as int) as score,
+            rep1,
+            case 
+                when isnull(provincia,'') = '' then 'leads sin región'  
+                when provincia in ('lima','callao') then 'leads lima'  
+                else 'leads provincia' 
+            end as region, 
+            marca as marcadesbase,
+            marca2,
+            flgsubproceso_hs,
+            situacionlaboral,
+            case
+                when len(replace(retiro,' ',''))>3  then lower(replace(retiro,' ','_'))
+                else 'no_aplica'
+            end as retiro     
+        from dantalion.dbo.base_maestra_efectiva_vigente
+        """
         
     df_base= obtener_tabla_sql(spark,query,server_kishin,user_kishin,pwd_kishin,db_kishin)
 
-    df_base = df_base.withColumn(
-        "score_%",
-        F.when((F.col("score") >= 0) & (F.col("score") <= 199), "a. [0,20%)")
-        .when(F.col("score") <= 399, "b. [20%,40%)")
-        .when(F.col("score") <= 599, "c. [40%,60%)")
-        .when(F.col("score") <= 799, "d. [60%,80%)")
-        .when(F.col("score") <= 999, "e. [80%,100%)")
-        .otherwise("z. otros")
-    )
+    # df_base = df_base.withColumn(
+    #     "score_%",
+    #     F.when((F.col("score") >= 0) & (F.col("score") <= 199), "a. [0,20%)")
+    #     .when(F.col("score") <= 399, "b. [20%,40%)")
+    #     .when(F.col("score") <= 599, "c. [40%,60%)")
+    #     .when(F.col("score") <= 799, "d. [60%,80%)")
+    #     .when(F.col("score") <= 999, "e. [80%,100%)")
+    #     .otherwise("z. otros")
+    # )
 
     df_base = df_base.withColumn(
         "rango_tasa",
@@ -850,12 +850,12 @@ def since_base_maestra_efe_consumo(spark):
                 .when(F.col("linea_hs_rs") >= 25000, "p. [25000,+)")
                 .otherwise("z. otros")
             )
-    df_base = df_base.withColumn(
-        "region",
-        F.when(F.col("province").isNull() | (F.col("province") == ""), "a. leads sin región")
-        .when(F.col("province").isin("LIMA", "CALLAO"), "b. leads lima")
-        .otherwise("c. leads provincia")
-    )
+    # df_base = df_base.withColumn(
+    #     "region",
+    #     F.when(F.col("province").isNull() | (F.col("province") == ""), "a. leads sin región")
+    #     .when(F.col("province").isin("LIMA", "CALLAO"), "b. leads lima")
+    #     .otherwise("c. leads provincia")
+    # )
 
     return df_base.withColumn(
         "vendor_lead_code",
@@ -1079,7 +1079,7 @@ def since_base_maestra_pp_dinners(spark):
     query = f"""
         SELECT
             NumDoc AS vendor_lead_code,
-            marca AS title,
+            tipo_producto AS title,
             ISNULL(nombre_producto, '') AS first_name,
             ISNULL(departamento, 'Sin_Departamento') AS last_name,
             nombre_largo AS address1,
@@ -1105,33 +1105,25 @@ def since_base_maestra_pp_dinners(spark):
             ISNULL('Campaña: ' + marca4, ''),'  ',' '))
             AS security_phrase,
 
-            CONCAT(
-						TRIM(REPLACE(ISNULL('tea_anterior: ' + CONVERT(VARCHAR, tea_PPD)+', ', '') +' '+
-			ISNULL('tasa_prestamo_actual: ' + CONVERT(VARCHAR(50), TASA_MACRO)+', ', '') + ' ' +
-			ISNULL('tem_ppd: ' +CONVERT(VARCHAR, tem_formato)+', ', ''),'  ',' '))+
-                ' ',
-                CASE
-                    WHEN MARCA = 'CD' THEN 
-                        ',Deuda_BCP: ' + ISNULL(CONVERT(VARCHAR(50), Deuda_BCP), '') + CHAR(13) + CHAR(10) +
-                        ',Deuda_bbva: ' + ISNULL(CONVERT(VARCHAR(50), Deuda_Continental), '') + CHAR(13) + CHAR(10) +
-                        ',Deuda_ibk: ' + ISNULL(CONVERT(VARCHAR(50), Deuda_Interbank), '') + CHAR(13) + CHAR(10) +
-                        ',Deuda_cco: ' + ISNULL(CONVERT(VARCHAR(50), Deuda_ScotiaBank), '') + CHAR(13) + CHAR(10) +
-                        ',Deuda_Falab: ' + ISNULL(CONVERT(VARCHAR(50), Deuda_Otros), '')
-
-                    ELSE 
-                        CASE
-                            WHEN TRY_CAST(
-                                REPLACE(
-                                    LEFT(prioridad_inicial, CHARINDEX('.', prioridad_inicial + '.') - 1),
-                                    ' ',
-                                    ''
-                                ) AS INT
-                            ) IN (4,5)
-                            THEN 'seguro 3%'
-                            ELSE ''
-                        END
-                END
-            ) AS comments,
+			TRIM(
+				REPLACE(
+					ISNULL('tasa_crm: ' + CONVERT(VARCHAR, tea_PPD)+', ', '') +' '+
+					ISNULL('tasa_credito_regular: ' + CONVERT(VARCHAR(50), TASA_MACRO)+', ', '') + 
+					ISNULL('Plazo min: ' + CAST(plazo_min AS VARCHAR(10))+', ', '') + 
+					ISNULL('Plazo max: ' + CAST(plazo_max AS VARCHAR(10))+', ', '') + 
+					ISNULL('Distrito: ' + Distrito+', ', '') + 
+					ISNULL('Situacion: ' + 
+											case
+												when RUC_Empresa='0' then 'independiente'
+												else 'dependiente'
+											end
+					+', ', '') + 
+					ISNULL('Recurrencia digital: ' + MARCA3 +', ', '') + 
+					' '
+				,'  '
+				,' ')
+            )
+			AS comments,
             TRY_CAST(
                 REPLACE(
                     NULLIF(REPLACE(TRIM(Deuda_BCP), '-', ''), ''),
@@ -1230,7 +1222,12 @@ def since_base_maestra_pp_dinners(spark):
             rpioridadvocales,
             estado_tarjeta,
             distrito_lab,
-            tasa_macro,
+            TRY_CAST(
+                REPLACE(
+                    NULLIF(REPLACE(TRIM(tasa_macro), '-', ''), ''),
+                    ',', '.'
+                ) AS FLOAT
+            ) / 100 AS tasa_macro,
             TRY_CAST(
                 REPLACE(
                     NULLIF(REPLACE(TRIM(tea_ppd), '%', ''), ''),
@@ -1250,14 +1247,12 @@ def since_base_maestra_pp_dinners(spark):
 
             fecha_envio,
             flag_adicion,
-
             CASE
                 WHEN LEN(REPLACE(retiro, ' ', '')) > 3 THEN LOWER(REPLACE(retiro, ' ', '_'))
                 ELSE 'no_aplica'
             END AS retiro,
-
-            nombre_producto
-
+            nombre_producto,
+            plazo_max,plazo_min
         FROM DANTALION.dbo.Base_Maestra_Diners_Vigente
         """
     df_base = obtener_tabla_sql(spark, query, server_kishin, user_kishin, pwd_kishin, db_kishin)
@@ -2039,57 +2034,6 @@ def since_tnumeros_valentina(spark,tb_valentina_cliente,fecha_mes_base):
     df_tnumero = df_tnumero.withColumn("ref_01", row_number().over(window_spec))
     return df_tnumero.filter(F.col("ref_01") == 1).drop('ref_01','cl_carga')
 
-# def update_tnumeros_valentina(spark,tb_valentina_cliente,fecha_mes_base,tb_tnumero):
-#     cl_base1 = fecha_a_nombre(fecha_mes_base)
-#     query = f"""
-#         SELECT 
-#             a.NUMERO_DOCUMENTO as dni_cliente,
-#             t.contacto,
-#             t.tipo_telf,
-#             a.cl_carga
-#         FROM VALENTINA.dbo.{tb_valentina_cliente} a
-
-#         OUTER APPLY (
-#             VALUES
-#                 (a.cl_telf1, 'cel01'),
-#                 (a.cl_telf2, 'cel02'),
-#                 (a.cl_telf3, 'cel03'),
-#                 (a.cl_telf4, 'cel04'),
-#                 (a.cl_telf5, 'cel05'),
-#                 (a.cl_telf6, 'cel06'),
-#                 (a.cl_telf7, 'cel07'),
-#                 (a.cl_telf8, 'cel08'),
-#                 (a.cl_telf9, 'cel09'),
-#                 (a.cl_telf10, 'cel10'),
-#                 (a.cl_movil, 'cel11'),
-#                 (a.cl_celular, 'cel12'),
-#                 (a.cl_telefono, 'cel13')
-#         ) t(contacto, tipo_telf)
-
-#         WHERE 
-#             a.cl_base = '{cl_base1}'
-#             AND (
-#                 (
-#                     t.contacto IS NOT NULL
-#                     AND t.contacto <> ''
-#                     AND LEN(t.contacto) = 9
-#                     AND t.contacto LIKE '9%'
-#                 )
-#                 OR t.contacto IS NULL   
-#             )
-        
-#         """
-#     df_tnumero=obtener_tabla_sql(spark,query,server_sa,user_sa,pwd_sa,db_sa)
-
-#     window_spec = Window.partitionBy("dni_cliente").orderBy(F.col("contacto").desc_nulls_last())
-#     df_tnumero = df_tnumero.withColumn("ref_01", row_number().over(window_spec))
-#     df_tnumero=df_tnumero.filter(F.col("ref_01") == 1).drop('ref_01','cl_carga')
-
-#     overwrite_table_SQL(spark,df_tnumero,tb_tnumero,server_kishin,user_kishin,pwd_kishin,db_kishin)
-
-
-
-# generar listas
 
 def lista_generada(spark,fecha_mes_base,tipi_cond1,tipi_cond2,tipi_cond3,tb_tipolofia,servidor_01,tipi_cod,tipi_resp_cod,tipi_descrip,tipi_estado,tipi_resp_estado,tipi_subdescripcion,tnum_tb,tnum_dni,tlista_generada,get_base):
 
@@ -2149,7 +2093,7 @@ def lista_generada(spark,fecha_mes_base,tipi_cond1,tipi_cond2,tipi_cond3,tb_tipo
             else PESO 
         end as mejor_peso_cli  
         FROM ODIN.dbo.{tb_tipolofia}
-        where LEFT({tipi_cod},1)='{tipi_resp_cod}' or {tipi_estado}='{tipi_resp_estado}' or {tipi_cod}='CALLBK'
+        where LEFT({tipi_cod},2)='{tipi_resp_cod}' or {tipi_estado}='{tipi_resp_estado}' or {tipi_cod}='CALLBK'
         """
     df_tipi1=obtener_tabla_sql(spark,query,server_zeus,user_zeus,pwd_zeus,db_zeus)
 
@@ -2173,8 +2117,12 @@ def lista_generada(spark,fecha_mes_base,tipi_cond1,tipi_cond2,tipi_cond3,tb_tipo
     df_lista=df_lista.join(df_tipi2,['ult_codigo_cli'],'left')
     df_lista=df_lista.join(df_tipi3,['mejor_codigo_telf'],'left')
 
+    cols_particion = ['vendor_lead_code', 'phone_number']
 
-    window_spec = Window.partitionBy("title",'vendor_lead_code','phone_number').orderBy(col("fecha_llamada").desc())
+    if 'title' in df_lista.columns:
+        cols_particion = ['title'] + cols_particion
+
+    window_spec = Window.partitionBy(*cols_particion).orderBy(col("fecha_llamada").desc())
     # window_spec = Window.partitionBy('vendor_lead_code','phone_number').orderBy(col("fecha_llamada").desc())
     df_lista = df_lista.withColumn("ref_01", row_number().over(window_spec))
     df_lista = df_lista.filter(col("ref_01") == 1).drop('ref_01')
@@ -2220,6 +2168,206 @@ def lista_generada(spark,fecha_mes_base,tipi_cond1,tipi_cond2,tipi_cond3,tb_tipo
     ])
     overwrite_table_SQL(spark,df_lista,f'{tlista_generada}',server_sa,user_sa,pwd_sa,'CRONOX')
     print(f'tabla {tlista_generada} actualizada')
+
+def lista_generada_ml(spark,fecha_mes_base,tipi_cond1,tipi_cond2,tipi_cond3,tb_tipolofia,servidor_01,tipi_cod,tipi_resp_cod,tipi_descrip,tipi_estado,tipi_resp_estado,tipi_subdescripcion,tnum_tb,tnum_dni,tlista_generada,get_base,array_contactabilidad,array_interes_seguimiento,array_objecion_comercial,array_venta,array_no_relanzable,venta_campana_name):
+
+    df_vicidial=since_vicidial(spark,fecha_mes_base,tipi_cond1,tipi_cond2,tipi_cond3,tb_tipolofia,servidor_01,tipi_cod,tipi_resp_cod,tipi_descrip,tipi_estado,tipi_resp_estado,tnum_tb,tnum_dni)
+    
+    window_spec = Window.partitionBy("vendor_lead_code","phone_number").orderBy(F.col("fecha_hora_llamada").desc_nulls_last())
+    df_vicidial = df_vicidial.withColumn("ref1_vici", row_number().over(window_spec))
+    df_vicidial = df_vicidial.filter(F.col('ref1_vici')==1).drop('ref1_vici')
+    
+    df_vicidial = df_vicidial.select('vendor_lead_code', 'phone_number', 'tramo', 'descripcion', 'peso', 'mejor_codigo_cli', 'fecha_llamada_1', 'fecha_hora_llamada_1', 'q_intentos', 'q_intentos_dia_1','duracion')
+
+    mapping = {
+        "q_intentos_dia_1": "q_intentos_dia",
+        "fecha_llamada_1": "fecha_llamada",
+        "fecha_hora_llamada_1": "fecha_hora_llamada"
+    }
+
+    df_vicidial = df_vicidial.toDF(*[
+        mapping.get(col, col) for col in df_vicidial.columns
+    ])
+
+    df_base_vigente = get_base(spark)
+    df_tnumeric=since_tnumeros(spark,tnum_tb,tnum_dni)
+
+    dic_telf = {v: i+1 for i, v in enumerate(listas_tnumeros)}
+
+    mapping_expr = F.create_map([F.lit(x) for x in chain(*dic_telf.items())])
+
+    df_tnumeric = df_tnumeric.withColumn(
+        "indice_tpo_telf",
+        mapping_expr[F.col("tipo_telf")]
+    )
+        
+    df_lista=df_tnumeric.join(df_base_vigente,['vendor_lead_code'],'left')
+    df_lista=df_lista.join(df_vicidial,['vendor_lead_code','phone_number'],'left')
+    
+    window_spec = Window.orderBy("vendor_lead_code")
+
+    df_lista = df_lista.withColumn(
+        "dni_unico",
+        dense_rank().over(window_spec)
+    )
+
+    query = f"""
+        SELECT {tipi_cod} as mejor_codigo_cli ,{tipi_estado} AS mejor_estado_tipi_cli
+        , case
+            when {tipi_cod}='CALLBK' then 'VOLVER A LLAMAR - call'
+            else {tipi_descrip} 
+        end as mejor_descripcion_cli 
+        , case
+            when {tipi_cod}='CALLBK' then 'AGENDAMIENTO - call'
+            else {tipi_subdescripcion}
+        end as mejor_sub_descripcion
+        ,case 
+            when {tipi_cod}='CALLBK' then 1200
+            else PESO 
+        end as mejor_peso_cli  
+        FROM ODIN.dbo.{tb_tipolofia}
+        where LEFT({tipi_cod},2)='{tipi_resp_cod}' or {tipi_estado}='{tipi_resp_estado}' or {tipi_cod}='CALLBK'
+        """
+    df_tipi1=obtener_tabla_sql(spark,query,server_zeus,user_zeus,pwd_zeus,db_zeus)
+
+    df_lista=df_lista.join(df_tipi1,['mejor_codigo_cli'],'left')
+
+    cols_particion = ['vendor_lead_code', 'phone_number']
+
+    if 'title' in df_lista.columns:
+        cols_particion = ['title'] + cols_particion
+
+    window_spec = Window.partitionBy(*cols_particion).orderBy(col("fecha_llamada").desc())
+    df_lista = df_lista.withColumn("ref_01", row_number().over(window_spec))
+    df_lista = df_lista.filter(col("ref_01") == 1).drop('ref_01')
+
+    df_lista = df_lista.withColumn(
+        'mejor_descripcion_cli',
+        F.when(F.col('mejor_codigo_cli') == 'INCALL', 'EN LLAMADA')
+        .when((F.col('mejor_codigo_cli') == 'DCMX') & (F.col('duracion') > 15), 'NO TIPIFICO A TIEMPO')
+        .when(F.col('mejor_codigo_cli') == 'DCMX', 'LINEA SATURADA')
+        .otherwise(F.col('mejor_descripcion_cli'))
+    )
+
+    window_spec = Window.partitionBy('vendor_lead_code').orderBy(col("fecha_llamada").desc())
+    df_lista = df_lista.withColumn("ref_01", row_number().over(window_spec))
+    df_lista = df_lista.filter(col("ref_01") == 1).drop('ref_01')
+
+    cols_prioridad = [
+        'vendor_lead_code', 'phone_number', 'title',
+        'first_name', 'last_name', 'address1', 'address2', 'address3',
+        'city', 'province', 'email', 'security_phrase', 'comments'
+    ]
+
+    cols_existentes = [c for c in cols_prioridad if c in df_lista.columns]
+
+    cols_restantes = [c for c in df_lista.columns if c not in cols_existentes]
+
+    df_lista = df_lista.select(cols_existentes + cols_restantes)
+    df_lista = df_lista.toDF(*[
+        re.sub(r'[^a-zA-Z0-9_]', '', c)
+        for c in df_lista.columns
+    ])
+
+    df_lista = df_lista.withColumn(
+        "tipificacion_limpia",
+        F.upper(F.trim(F.col("mejor_descripcion_cli")))
+    )
+
+    df_lista = df_lista.withColumn(
+        "grupo_tipificacion",
+        F.when(F.col("tipificacion_limpia").isin([x.strip().upper() for x in array_contactabilidad]), "CONTACTABILIDAD")
+        .when(F.col("tipificacion_limpia").isin([x.strip().upper() for x in array_interes_seguimiento]), "INTERES_SEGUIMIENTO")
+        .when(F.col("tipificacion_limpia").isin([x.strip().upper() for x in array_objecion_comercial]), "OBJECION_COMERCIAL")
+        .when(F.col("tipificacion_limpia").isin([x.strip().upper() for x in array_venta]), "VENTA")
+        .when(F.col("tipificacion_limpia").isin([x.strip().upper() for x in array_no_relanzable]), "NO_RELANZABLE")
+        .otherwise("SIN_GESTION")
+    ).drop('mejor_codigo_cli','tipificacion_limpia')
+
+    df_venta=since_ventas(spark,fecha_mes_base,venta_campana_name)
+    df_venta = df_venta.select(
+        'vendor_lead_code',
+        F.lit(1).alias('venta_target')
+    )
+    df_lista=df_lista.join(df_venta,['vendor_lead_code'],'left')
+
+    df_lista=df_lista.withColumn("anio", F.year(F.lit(fecha_mes_base)))
+    df_lista=df_lista.withColumn("mes", F.month(F.lit(fecha_mes_base)))
+    df_lista=df_lista.withColumn("periodo", F.date_format(F.lit(fecha_mes_base), "yyyy-MM"))
+
+    df_lista = (
+        df_lista
+        .withColumn("dia_mes", F.dayofmonth(F.col("fecha_hora_llamada")))
+        .withColumn("dia_semana", F.dayofweek(F.col("fecha_hora_llamada")))
+    )
+
+    overwrite_table_SQL(spark,df_lista,f'{tlista_generada}',server_sa,user_sa,pwd_sa,'CRONOX')
+    print(f'tabla {tlista_generada} actualizada')
+
+
+def lista_generada_ml_maeba(spark,fecha_mes_base,get_base,array_contactabilidad,array_interes_seguimiento,array_objecion_comercial,array_venta,array_no_relanzable,venta_campana_name,tlista_generada):
+
+    query = f"""
+    SELECT Dni as vendor_lead_code,  fecha_hora_llamada, segundos as duracion, Trama_Hora as tramo, phone_number, Descripcion_ as mejor_descripcion_cli
+    FROM MAEBA.ADM_OBJ_TG.synTmpLLamadasDinersTc
+    WHERE CONVERT(DATE, Fecha_Hora_Llamada) >= CONVERT(DATE, '{fecha_mes_base}')
+    AND CONVERT(DATE, Fecha_Hora_Llamada) < DATEADD(MONTH, 1, CONVERT(DATE, '{fecha_mes_base}'))
+    """
+    df_vicidial = obtener_tabla_sql(spark,query,server_zeus,user_zeus,pwd_zeus,db_zeus)
+    df_base_vigente = get_base(spark)
+
+    df_lista=df_base_vigente.join(df_vicidial,['vendor_lead_code'],'left')
+    
+    cols_prioridad = [
+        'vendor_lead_code', 'phone_number', 'title',
+        'first_name', 'last_name', 'address1', 'address2', 'address3',
+        'city', 'province', 'email', 'security_phrase', 'comments'
+    ]
+
+    cols_existentes = [c for c in cols_prioridad if c in df_lista.columns]
+
+    cols_restantes = [c for c in df_lista.columns if c not in cols_existentes]
+
+    df_lista = df_lista.select(cols_existentes + cols_restantes)
+    df_lista = df_lista.toDF(*[
+        re.sub(r'[^a-zA-Z0-9_]', '', c)
+        for c in df_lista.columns
+    ])
+
+    df_lista = df_lista.withColumn(
+        "tipificacion_limpia",
+        F.upper(F.trim(F.col("mejor_descripcion_cli")))
+    )
+
+    df_lista = df_lista.withColumn(
+        "grupo_tipificacion",
+        F.when(F.col("tipificacion_limpia").isin([x.strip().upper() for x in array_contactabilidad]), "CONTACTABILIDAD")
+        .when(F.col("tipificacion_limpia").isin([x.strip().upper() for x in array_interes_seguimiento]), "INTERES_SEGUIMIENTO")
+        .when(F.col("tipificacion_limpia").isin([x.strip().upper() for x in array_objecion_comercial]), "OBJECION_COMERCIAL")
+        .when(F.col("tipificacion_limpia").isin([x.strip().upper() for x in array_venta]), "VENTA")
+        .when(F.col("tipificacion_limpia").isin([x.strip().upper() for x in array_no_relanzable]), "NO_RELANZABLE")
+        .otherwise("SIN_GESTION")
+    ).drop('tipificacion_limpia')
+
+    df_venta=since_ventas(spark,fecha_mes_base,venta_campana_name)
+    df_venta = df_venta.select(
+        'vendor_lead_code',
+        F.lit(1).alias('venta_target')
+    )
+    df_lista=df_lista.join(df_venta,['vendor_lead_code'],'left')
+
+    df_lista=df_lista.withColumn("anio", F.year(F.lit(fecha_mes_base)))
+    df_lista=df_lista.withColumn("mes", F.month(F.lit(fecha_mes_base)))
+    df_lista=df_lista.withColumn("periodo", F.date_format(F.lit(fecha_mes_base), "yyyy-MM"))
+
+    df_lista = (
+        df_lista
+        .withColumn("dia_mes", F.dayofmonth(F.col("fecha_hora_llamada")))
+        .withColumn("dia_semana", F.dayofweek(F.col("fecha_hora_llamada")))
+    )
+
+    overwrite_table_SQL(spark,df_lista,f'{tlista_generada}',server_sa,user_sa,pwd_sa,'CRONOX')
+    print(f'tabla {tlista_generada} actualizada ')
 
 
 
@@ -2731,7 +2879,6 @@ def lista_generada_valentina_actual(spark,fecha_mes_base,ls_una_vez,ls_casilla,l
     df_lista=df_lista.join(df_venta,['cl_id'],'left')
     overwrite_table_SQL(spark,df_lista,f'{tlista_generada}',server_sa,user_sa,pwd_sa,'CRONOX')
     print(f'tabla {tlista_generada} actualizada')
-
 
 def generar_tb_vigente(spark,fecha_mes_base,t_maestra,t_name_vigente,t_mumeros,cols_drop):
     query=f'''
