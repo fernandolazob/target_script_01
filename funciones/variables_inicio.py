@@ -3,7 +3,7 @@ ruta_archivo_generado = "C:\\Users\\DATA\\Documents\\datos\\generado"
 ruta_base = 'C:\\Users\\DATA\\Documents\\datos\\recepcion_base'
 
 ruta_csv='C:\\Users\\DATA\\Documents\\datos\\05_subir_csv'
-
+ruta_rrhh='C:\\Users\\DATA\\Documents\\datos\\05_subir_csv\\rrhh'
 
 # sql server
 port = '1433'

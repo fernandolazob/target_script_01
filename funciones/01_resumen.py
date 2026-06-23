@@ -114,8 +114,8 @@ def list02_tc_dinners(spark):
 
 def list02_prestamo_dinners(spark):
     fecha_mes_base='2026-06-01'
-    tipi_cond1='diners'
-    # tipi_cond1='plus'
+    # tipi_cond1='diners'
+    tipi_cond1='plus'
     tipi_cond2='xx'
     tipi_cond3='xx'
     tb_tipolofia='tTipologia_Diners_PPD'
@@ -149,7 +149,6 @@ def list03_alfin(spark):
 
 def list03_credicash(spark):
    
-   
     ls_una_vez=[]
     ls_casilla=[]
     ls_ocupado=[]
@@ -177,17 +176,21 @@ def list03_credicash(spark):
 # tb_name_tnum_resultante='tNumero_alfin_borrar_01'
 # pool_tnumeros_valentina(spark,'dni_cliente',tb_name_tnum,tb_name_tnum_resultante)
 
-
 # list02_tc_cenco(spark)
+# http://192.168.2.100/Cronox
 
-# list02_consumo_efe(spark)
-# list02_prestamo_dinners(spark)
 list02_tc_dinners(spark) 
+# list02_prestamo_dinners(spark)
 # list02_negocios_efe(spark)
+# list02_consumo_efe(spark)
 # list02_prestamo_cenco(spark)
+
+# hugo.lopez@targetoutsourcing.com.pe
+
+
+
 # list03_alfin(spark) 
 # list03_credicash(spark)
-
 # biya
 # telemarketing@vensud.com
 # T@RG3T.2025!$pp_dinner_202604151615q
@@ -201,3 +204,6 @@ list02_tc_dinners(spark)
 
 # tmp_llamadas_dinners_5 la mejor
 # tmp_llamada_dinners_ total gestion
+
+
+

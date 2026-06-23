@@ -474,6 +474,192 @@ def since_vicidial(spark,fecha_mes_base,tipi_cond1,tipi_cond2,tipi_cond3,tb_tipo
 
     return df_vicidial
 
+def since_vicidial_dia(spark,fecha_mes_base,tipi_cond1,tipi_cond2,tipi_cond3,tb_tipolofia,servidor_01,tipi_cod,tipi_resp_cod,tipi_descrip,tipi_estado,tipi_resp_estado,tnum_tb,tnum_dni,fecha_mes_base_final):
+            # a.user AS dni_ejecutivo,        
+            # c.full_name AS ejecutivo,        
+    query = f"""
+        SELECT *
+        FROM OPENQUERY([192.168.3.{servidor_01}], '
+            SELECT        
+            rtrim(ltrim(d.vendor_lead_code)) AS vendor_lead_code,        
+            e.dial_method,
+            a.campaign_id AS numero_campana,        
+            a.user AS dni_ejecutivo,
+            c.full_name AS ejecutivo,
+            e.campaign_name AS nombre_campana,        
+            a.call_date AS fecha_hora_llamada,        
+            a.length_in_sec AS duracion,        
+            b.status_name AS call_result,        
+            f.list_description,        
+            f.list_name,        
+            a.phone_number as phone_number,        
+            d.alt_phone as fecha_agenda,        
+            d.comments as comentarios,        
+            a.status AS codigo
+            FROM asterisk.vicidial_log a         
+            LEFT JOIN asterisk.vicidial_list d ON a.lead_id=d.lead_id        
+            LEFT JOIN asterisk.vicidial_campaigns e ON a.campaign_id=e.campaign_id        
+            LEFT JOIN asterisk.vicidial_lists f ON a.list_id=f.list_id        
+            LEFT JOIN asterisk.vicidial_statuses b ON a.status=b.status        
+            LEFT JOIN asterisk.vicidial_users c ON a.user=c.user        
+            WHERE (e.campaign_name like "%{tipi_cond1}" or e.campaign_name like "%{tipi_cond2}" or e.campaign_name like "%{tipi_cond3}")
+            AND a.call_date >= DATE_FORMAT(''{fecha_mes_base}'', ''%Y-%m-01'')
+            AND a.call_date < ''{fecha_mes_base_final}''
+        ')
+
+        """
+    df_vicidial=obtener_tabla_sql(spark,query,server_zeus,user_zeus,pwd_zeus,db_zeus)
+
+    df_vicidial=df_vicidial.withColumn(
+            "vendor_lead_code",
+            F.right(
+                F.concat(F.lit("00000000"), F.col("vendor_lead_code")),
+                F.lit(8)
+            )
+        )
+
+    query = f"""
+        select 
+        distinct
+        Telefonos as phone_number,{tnum_dni} as vendor_lead_code_1
+        from DANTALION.dbo.{tnum_tb}
+        """
+    df_tnumer=obtener_tabla_sql(spark,query,server_kishin,user_kishin,pwd_kishin,db_kishin)
+    
+    df_tnumer = df_tnumer.withColumn(
+            "vendor_lead_code_1",
+            F.right(
+                F.concat(F.lit("00000000"), F.col("vendor_lead_code_1")),
+                F.lit(8)
+            )
+        )
+
+    df_vicidial=df_vicidial.join(df_tnumer,['phone_number'],'left')
+
+    df_vicidial = df_vicidial.withColumn(
+        "vendor_lead_code",
+        F.coalesce(F.col("vendor_lead_code"), F.col("vendor_lead_code_1"))
+    ).drop("vendor_lead_code_1")
+    df_vicidial=df_vicidial.filter(F.col('vendor_lead_code').isNotNull())
+
+    df_vicidial = (
+        df_vicidial
+        .withColumn("fecha_llamada", F.to_date(F.col("fecha_hora_llamada")))
+        .withColumn("tramo", F.hour(F.col("fecha_hora_llamada")))
+        .withColumn("hora_a", F.date_format(F.col("fecha_hora_llamada"), "HH:mm:ss"))
+    )
+
+    query = f"""
+        SELECT {tipi_cod} as codigo
+        , case
+            when {tipi_cod}='CALLBK' then 'VOLVER A LLAMAR - call'
+            else {tipi_descrip} 
+        end as descripcion
+        ,case 
+            when {tipi_cod}='CALLBK' then 1200
+            else peso 
+        end as peso  FROM [ODIN].[dbo].{tb_tipolofia}
+        where LEFT({tipi_cod},2)='{tipi_resp_cod}' or {tipi_estado}='{tipi_resp_estado}' or {tipi_cod}='CALLBK'
+        """
+    df_tipi=obtener_tabla_sql(spark,query,server_zeus,user_zeus,pwd_zeus,db_zeus)
+
+    df_vicidial=df_vicidial.join(df_tipi,["codigo"],"left")
+
+    df_vicidial = df_vicidial.withColumn(
+        'peso',
+        F.when(F.col('codigo') == 'INCALL', 100000)
+        .when((F.col('codigo') == 'DCMX') & (F.col('duracion') > 15), 100001)
+        .when(F.col('codigo') == 'DCMX', 100002)
+        .otherwise(F.col('peso'))
+    )
+
+    window_spec = (Window.partitionBy("vendor_lead_code")
+                    .orderBy(col("peso").asc_nulls_last()
+                    ))
+    df_vicidial = df_vicidial.withColumn("n_mejor_resul_cli", row_number().over(window_spec))
+
+    window_spec = (Window.partitionBy("vendor_lead_code",'phone_number')
+                    .orderBy(
+                        col("peso").asc_nulls_last(),
+                        col("hora_a").desc_nulls_last()
+                    ))
+
+    df_vicidial = df_vicidial.withColumn(
+        "n_mejor_resul_telf",
+        F.when(
+            F.col("duracion") > 15,
+            F.row_number().over(window_spec)
+        )
+    )
+
+    window_spec = (Window.partitionBy("vendor_lead_code")
+                    .orderBy(
+                        col("fecha_hora_llamada").desc_nulls_last()
+                    ))
+    df_vicidial = df_vicidial.withColumn("n_ult_resul", row_number().over(window_spec))
+
+    window_part = Window.partitionBy("vendor_lead_code")
+    df_vicidial = df_vicidial.withColumn(
+        "mejor_codigo_cli",
+        F.max(
+            F.when(F.col("n_mejor_resul_cli") == 1, F.col("codigo"))
+        ).over(window_part)
+    )
+
+    df_vicidial = df_vicidial.withColumn(
+        "ult_codigo_cli",
+        F.max(
+            F.when(F.col("n_ult_resul") == 1, F.col("codigo"))
+        ).over(window_part)
+    )
+
+    df_vicidial = df_vicidial.withColumn(
+        "ult_call_result",
+        F.max(
+            F.when(F.col("n_ult_resul") == 1, F.col("call_result"))
+        ).over(window_part)
+    )
+
+    df_vicidial = df_vicidial.withColumn(
+        "fecha_llamada_1",
+        F.max(
+            F.when(F.col("n_ult_resul") == 1, F.col("fecha_llamada"))
+        ).over(window_part)
+    )
+
+    df_vicidial = df_vicidial.withColumn(
+        "fecha_hora_llamada_1",
+        F.max(
+            F.when(F.col("n_ult_resul") == 1, F.col("fecha_hora_llamada"))
+        ).over(window_part)
+    )  
+
+    df_vicidial = df_vicidial.withColumn("q_intentos",count("*").over(window_part))
+
+    window_part = Window.partitionBy("vendor_lead_code",'phone_number')
+    df_vicidial = df_vicidial.withColumn(
+        "mejor_codigo_telf",
+        F.max(
+            F.when(F.col("n_mejor_resul_telf") == 1, F.col("codigo"))
+        ).over(window_part)
+    )
+    
+    df_vicidial = df_vicidial.withColumn("q_intentos_telf",count("*").over(window_part))
+
+    window_part = Window.partitionBy('fecha_llamada',"vendor_lead_code")
+    df_vicidial = df_vicidial.withColumn("q_intentos_dia",count("*").over(window_part))
+
+    window_part = Window.partitionBy("vendor_lead_code")
+    df_vicidial = df_vicidial.withColumn(
+        "q_intentos_dia_1",
+        F.max(
+            F.when(F.col("fecha_llamada") == F.col("fecha_llamada_1"), F.col("q_intentos_dia"))
+        ).over(window_part)
+    )
+
+    return df_vicidial
+
+
 def since_ventas(spark,fecha_mes_base,campana):
     query = f"""
         select FECHA as fecha_gestion,DNI as vendor_lead_code,
@@ -893,7 +1079,8 @@ def since_base_maestra_efe_negocio(spark):
             WHEN REP1=1 then 'STOCK' 
             ELSE 'NUEVO'
         END as marca,  
-        fecha_envio,           
+        fecha_envio,      
+        TIPOBASEMICROPEQUENA,     
         case
             when len(replace(retiro,' ',''))>3  then lower(replace(retiro,' ','_'))
             else 'no_aplica'
@@ -1107,7 +1294,6 @@ def since_base_maestra_pp_dinners(spark):
 
 			TRIM(
 				REPLACE(
-					ISNULL('tasa_crm: ' + CONVERT(VARCHAR, tea_PPD)+', ', '') +' '+
 					ISNULL('tasa_credito_regular: ' + CONVERT(VARCHAR(50), TASA_MACRO)+', ', '') + 
 					ISNULL('Plazo min: ' + CAST(plazo_min AS VARCHAR(10))+', ', '') + 
 					ISNULL('Plazo max: ' + CAST(plazo_max AS VARCHAR(10))+', ', '') + 
@@ -1365,7 +1551,6 @@ def since_base_maestra_pp_dinners(spark):
             F.lit(8)
         )
     )
-
 
 def pool_tnumeros(spark,dni_maestra,tb_maestra,cross_list_01,tb_name_tnum,cross_columns_a1,dni_a1,fecha_ref_a1,peso_ref_a1,tb_a1,cross_columns_a2,dni_a2,fecha_ref_a2,peso_ref_a2,tb_a2,cross_columns_a3,dni_a3,fecha_ref_a3,peso_ref_a3,tb_a3,cross_columns_a4,dni_a4,fecha_ref_a4,peso_ref_a4,tb_a4,cross_columns_a5,dni_a5,fecha_ref_a5,peso_ref_a5,tb_a5):
 
@@ -2169,6 +2354,144 @@ def lista_generada(spark,fecha_mes_base,tipi_cond1,tipi_cond2,tipi_cond3,tb_tipo
     overwrite_table_SQL(spark,df_lista,f'{tlista_generada}',server_sa,user_sa,pwd_sa,'CRONOX')
     print(f'tabla {tlista_generada} actualizada')
 
+def lista_generada_dia(spark,fecha_mes_base,tipi_cond1,tipi_cond2,tipi_cond3,tb_tipolofia,servidor_01,tipi_cod,tipi_resp_cod,tipi_descrip,tipi_estado,tipi_resp_estado,tipi_subdescripcion,tnum_tb,tnum_dni,get_base,fecha_mes_base_final):
+
+    df_vicidial=since_vicidial_dia(spark,fecha_mes_base,tipi_cond1,tipi_cond2,tipi_cond3,tb_tipolofia,servidor_01,tipi_cod,tipi_resp_cod,tipi_descrip,tipi_estado,tipi_resp_estado,tnum_tb,tnum_dni,fecha_mes_base_final)
+    
+    # window_spec = Window.partitionBy("title","vendor_lead_code","phone_number").orderBy(F.col("fecha_hora_llamada").desc_nulls_last())
+    window_spec = Window.partitionBy("vendor_lead_code","phone_number").orderBy(F.col("fecha_hora_llamada").desc_nulls_last())
+    df_vicidial = df_vicidial.withColumn("ref1_vici", row_number().over(window_spec))
+    df_vicidial = df_vicidial.filter(F.col('ref1_vici')==1).drop('ref1_vici')
+    
+    df_vicidial = df_vicidial.select('vendor_lead_code', 'phone_number', 'call_result', 'tramo', 'descripcion', 'peso', 'mejor_codigo_cli', 'ult_codigo_cli', 'ult_call_result', 'fecha_llamada_1', 'fecha_hora_llamada_1', 'q_intentos', 'mejor_codigo_telf', 'q_intentos_telf', 'q_intentos_dia_1','duracion')
+
+    mapping = {
+        "q_intentos_dia_1": "q_intentos_dia",
+        "fecha_llamada_1": "fecha_llamada",
+        "fecha_hora_llamada_1": "fecha_hora_llamada"
+    }
+
+    df_vicidial = df_vicidial.toDF(*[
+        mapping.get(col, col) for col in df_vicidial.columns
+    ])
+
+    df_base_vigente = get_base(spark)
+    df_tnumeric=since_tnumeros(spark,tnum_tb,tnum_dni)
+
+    dic_telf = {v: i+1 for i, v in enumerate(listas_tnumeros)}
+
+    mapping_expr = F.create_map([F.lit(x) for x in chain(*dic_telf.items())])
+
+    df_tnumeric = df_tnumeric.withColumn(
+        "indice_tpo_telf",
+        mapping_expr[F.col("tipo_telf")]
+    )
+        
+    df_lista=df_tnumeric.join(df_base_vigente,['vendor_lead_code'],'left')
+    df_lista=df_lista.join(df_vicidial,['vendor_lead_code','phone_number'],'left')
+    
+    window_spec = Window.orderBy("vendor_lead_code")
+
+    df_lista = df_lista.withColumn(
+        "dni_unico",
+        dense_rank().over(window_spec)
+    )
+
+    query = f"""
+        SELECT {tipi_cod} as mejor_codigo_cli ,{tipi_estado} AS mejor_estado_tipi_cli
+        , case
+            when {tipi_cod}='CALLBK' then 'VOLVER A LLAMAR - call'
+            else {tipi_descrip} 
+        end as mejor_descripcion_cli 
+        , case
+            when {tipi_cod}='CALLBK' then 'AGENDAMIENTO - call'
+            else {tipi_subdescripcion}
+        end as mejor_sub_descripcion
+        ,case 
+            when {tipi_cod}='CALLBK' then 1200
+            else PESO 
+        end as mejor_peso_cli  
+        FROM ODIN.dbo.{tb_tipolofia}
+        where LEFT({tipi_cod},2)='{tipi_resp_cod}' or {tipi_estado}='{tipi_resp_estado}' or {tipi_cod}='CALLBK'
+        """
+    df_tipi1=obtener_tabla_sql(spark,query,server_zeus,user_zeus,pwd_zeus,db_zeus)
+
+    df_tipi2 = df_tipi1.selectExpr(
+        "mejor_codigo_cli as ult_codigo_cli",
+        "mejor_estado_tipi_cli as ult_estado_tipi_cli",
+        "mejor_descripcion_cli as ult_descripcion_cli",
+        "mejor_sub_descripcion as ult_sub_descripcion_cli",
+        "mejor_peso_cli as ult_peso_cli"
+    )
+
+    df_tipi3 = df_tipi1.selectExpr(
+        "mejor_codigo_cli as mejor_codigo_telf",
+        "mejor_estado_tipi_cli as mejor_estado_tipi_telf",
+        "mejor_descripcion_cli as mejor_descripcion_telf",
+        "mejor_sub_descripcion as mejor_sub_descripcion_telf",
+        "mejor_peso_cli as mejor_peso_telf"
+    )
+
+    df_lista=df_lista.join(df_tipi1,['mejor_codigo_cli'],'left')
+    df_lista=df_lista.join(df_tipi2,['ult_codigo_cli'],'left')
+    df_lista=df_lista.join(df_tipi3,['mejor_codigo_telf'],'left')
+
+    cols_particion = ['vendor_lead_code', 'phone_number']
+
+    if 'title' in df_lista.columns:
+        cols_particion = ['title'] + cols_particion
+
+    window_spec = Window.partitionBy(*cols_particion).orderBy(col("fecha_llamada").desc())
+    # window_spec = Window.partitionBy('vendor_lead_code','phone_number').orderBy(col("fecha_llamada").desc())
+    df_lista = df_lista.withColumn("ref_01", row_number().over(window_spec))
+    df_lista = df_lista.filter(col("ref_01") == 1).drop('ref_01')
+
+    df_lista = df_lista.withColumn(
+        'mejor_descripcion_cli',
+        F.when(F.col('mejor_codigo_cli') == 'INCALL', 'EN LLAMADA')
+        .when((F.col('mejor_codigo_cli') == 'DCMX') & (F.col('duracion') > 15), 'NO TIPIFICO A TIEMPO')
+        .when(F.col('mejor_codigo_cli') == 'DCMX', 'LINEA SATURADA')
+        .otherwise(F.col('mejor_descripcion_cli'))
+    )
+
+    df_lista = df_lista.withColumn(
+        'ult_descripcion_cli',
+        F.when(F.col('ult_codigo_cli') == 'INCALL', 'EN LLAMADA')
+        .when((F.col('ult_codigo_cli') == 'DCMX') & (F.col('duracion') > 15), 'NO TIPIFICO A TIEMPO')
+        .when(F.col('ult_codigo_cli') == 'DCMX', 'LINEA SATURADA')
+        .otherwise(F.col('ult_descripcion_cli'))
+    )
+
+    df_lista = df_lista.withColumn(
+        'mejor_descripcion_telf',
+        F.when(F.col('mejor_codigo_telf') == 'INCALL', 'EN LLAMADA')
+        .when((F.col('mejor_codigo_telf') == 'DCMX') & (F.col('duracion') > 15), 'NO TIPIFICO A TIEMPO')
+        .when(F.col('mejor_codigo_telf') == 'DCMX', 'LINEA SATURADA')
+        .otherwise(F.col('mejor_descripcion_telf'))
+    ).drop('duracion')
+
+    cols_prioridad = [
+        'vendor_lead_code', 'phone_number', 'title',
+        'first_name', 'last_name', 'address1', 'address2', 'address3',
+        'city', 'province', 'email', 'security_phrase', 'comments'
+    ]
+
+    cols_existentes = [c for c in cols_prioridad if c in df_lista.columns]
+
+    cols_restantes = [c for c in df_lista.columns if c not in cols_existentes]
+
+    df_lista = df_lista.select(cols_existentes + cols_restantes)
+    df_lista = df_lista.toDF(*[
+        re.sub(r'[^a-zA-Z0-9_]', '', c)
+        for c in df_lista.columns
+    ])
+    df_lista=df_lista.dropDuplicates(['vendor_lead_code'])
+
+    return df_lista.select('vendor_lead_code','phone_number','title','first_name','last_name','address1','address2','address3','city','province','email','security_phrase','comments','mejor_codigo_cli','indice_num','tipo_telf','indice','regimen_laboral','producto','marca','tea','retiro','fec_pago','monto_ant','monto_desembolsar','rng_saldo_tc_entre_linea_total_tc','disp_retiro_efect_','mejora_tasa','linea_sae','pct_sae','edad','frescura_target','flg_mejora','propension','tipdoc','fecha_envio','seg_monto','seg_tea','seg_edad','fecha_llamada','fecha_hora_llamada','mejor_estado_tipi_cli','mejor_descripcion_cli','mejor_sub_descripcion')
+
+
+
+
 def lista_generada_ml(spark,fecha_mes_base,tipi_cond1,tipi_cond2,tipi_cond3,tb_tipolofia,servidor_01,tipi_cod,tipi_resp_cod,tipi_descrip,tipi_estado,tipi_resp_estado,tipi_subdescripcion,tnum_tb,tnum_dni,tlista_generada,get_base,array_contactabilidad,array_interes_seguimiento,array_objecion_comercial,array_venta,array_no_relanzable,venta_campana_name):
 
     df_vicidial=since_vicidial(spark,fecha_mes_base,tipi_cond1,tipi_cond2,tipi_cond3,tb_tipolofia,servidor_01,tipi_cod,tipi_resp_cod,tipi_descrip,tipi_estado,tipi_resp_estado,tnum_tb,tnum_dni)
@@ -2305,34 +2628,31 @@ def lista_generada_ml(spark,fecha_mes_base,tipi_cond1,tipi_cond2,tipi_cond3,tb_t
     print(f'tabla {tlista_generada} actualizada')
 
 
-def lista_generada_ml_maeba(spark,fecha_mes_base,get_base,array_contactabilidad,array_interes_seguimiento,array_objecion_comercial,array_venta,array_no_relanzable,venta_campana_name,tlista_generada):
+def lista_generada_ml_maeba(spark,fecha_mes_base,get_base,array_contactabilidad,array_interes_seguimiento,array_objecion_comercial,array_venta,array_no_relanzable,tlista_generada):
 
     query = f"""
-    SELECT Dni as vendor_lead_code,  fecha_hora_llamada, segundos as duracion, Trama_Hora as tramo, phone_number, Descripcion_ as mejor_descripcion_cli
-    FROM MAEBA.ADM_OBJ_TG.synTmpLLamadasDinersTc
-    WHERE CONVERT(DATE, Fecha_Hora_Llamada) >= CONVERT(DATE, '{fecha_mes_base}')
-    AND CONVERT(DATE, Fecha_Hora_Llamada) < DATEADD(MONTH, 1, CONVERT(DATE, '{fecha_mes_base}'))
+        SELECT 
+            [NUMERO_DOCUMENTO] AS vendor_lead_code,
+            [Hora_Llamada] AS tramo,
+            fecha_llamada,
+            [CNTVTAS] as venta_target,
+            [segundos] AS duracion,
+            SUBGESTION as mejor_descripcion_cli,
+            [CNT_LLAMADAS] AS q_intentos
+        FROM [MAEBA].[ADM_OBJ_TG].[tGestionMesDinersTc]
+        WHERE [Hora_Llamada] IS NOT NULL
+        AND AÑO_DURACION_BASE = YEAR(CONVERT(DATE, '{fecha_mes_base}'))
+        AND MES_DURACION_BASE = RIGHT('0' + CAST(MONTH(CONVERT(DATE, '{fecha_mes_base}')) AS VARCHAR(2)), 2)
     """
-    df_vicidial = obtener_tabla_sql(spark,query,server_zeus,user_zeus,pwd_zeus,db_zeus)
-    df_base_vigente = get_base(spark)
 
-    df_lista=df_base_vigente.join(df_vicidial,['vendor_lead_code'],'left')
-    
-    cols_prioridad = [
-        'vendor_lead_code', 'phone_number', 'title',
-        'first_name', 'last_name', 'address1', 'address2', 'address3',
-        'city', 'province', 'email', 'security_phrase', 'comments'
-    ]
+    df_historico = obtener_tabla_sql(spark,query,server_zeus,user_zeus,pwd_zeus,db_zeus)
+    df_base_vigente = get_base(spark,fecha_mes_base)
 
-    cols_existentes = [c for c in cols_prioridad if c in df_lista.columns]
+    window_spec = Window.partitionBy('vendor_lead_code').orderBy(col("fecha_envio").desc())
+    df_base_vigente = df_base_vigente.withColumn("ref_01", row_number().over(window_spec))
+    df_base_vigente = df_base_vigente.filter(col("ref_01") == 1).drop('ref_01')
 
-    cols_restantes = [c for c in df_lista.columns if c not in cols_existentes]
-
-    df_lista = df_lista.select(cols_existentes + cols_restantes)
-    df_lista = df_lista.toDF(*[
-        re.sub(r'[^a-zA-Z0-9_]', '', c)
-        for c in df_lista.columns
-    ])
+    df_lista=df_base_vigente.join(df_historico,['vendor_lead_code'],'left')
 
     df_lista = df_lista.withColumn(
         "tipificacion_limpia",
@@ -2349,12 +2669,12 @@ def lista_generada_ml_maeba(spark,fecha_mes_base,get_base,array_contactabilidad,
         .otherwise("SIN_GESTION")
     ).drop('tipificacion_limpia')
 
-    df_venta=since_ventas(spark,fecha_mes_base,venta_campana_name)
-    df_venta = df_venta.select(
-        'vendor_lead_code',
-        F.lit(1).alias('venta_target')
-    )
-    df_lista=df_lista.join(df_venta,['vendor_lead_code'],'left')
+    # df_venta=since_ventas(spark,fecha_mes_base,venta_campana_name)
+    # df_venta = df_venta.select(
+    #     'vendor_lead_code',
+    #     F.lit(1).alias('venta_target')
+    # )
+    # df_lista=df_lista.join(df_venta,['vendor_lead_code'],'left')
 
     df_lista=df_lista.withColumn("anio", F.year(F.lit(fecha_mes_base)))
     df_lista=df_lista.withColumn("mes", F.month(F.lit(fecha_mes_base)))
@@ -2362,13 +2682,304 @@ def lista_generada_ml_maeba(spark,fecha_mes_base,get_base,array_contactabilidad,
 
     df_lista = (
         df_lista
-        .withColumn("dia_mes", F.dayofmonth(F.col("fecha_hora_llamada")))
-        .withColumn("dia_semana", F.dayofweek(F.col("fecha_hora_llamada")))
+        .withColumn("dia_mes", F.dayofmonth(F.col("fecha_llamada")))
+        .withColumn("dia_semana", F.dayofweek(F.col("fecha_llamada")))
     )
 
     overwrite_table_SQL(spark,df_lista,f'{tlista_generada}',server_sa,user_sa,pwd_sa,'CRONOX')
     print(f'tabla {tlista_generada} actualizada ')
 
+def since_base_maestra_tc_dinners_maeba(spark,fecha_mes_base):
+    query = f"""
+        select 
+            numero_documento as vendor_lead_code,
+            [tasa(tea)] as tea,tea_df,tcea,tcea_cuotas_df,
+            isnull([producto],'') as first_name,
+            isnull([limaprovincia],'sin_departamento') as last_name,
+            ISNULL([nombres],'')+' '+ISNULL([apellido paterno],'')+' '+isnull([apellido materno],'') as address1,
+            datediff(year, try_convert(date, fec_nac, 23), getdate()) as address2,
+            'free'+' tea '+convert(varchar,tea_df)+' tcea '+convert(varchar,tcea_cuotas_df) as address3,
+            isnull(cashback,'') as city,
+            isnull(marca_speech,'') as province,
+            'tea'+' '+convert(varchar,[tasa(tea)])+' '+'tcea'+' '+ convert(varchar,tcea) as email,
+            'ofert.dolar'+' '+isnull([linea credito dolares],'') as security_phrase,
+            CAST(REPLACE([LINEA CREDITO DOLARES], ',', '') AS numeric(18,2)) AS linea_credito,
+            cprueba as comments,
+            CONVERT(float, REPLACE(l_bcp, ',', '.'))   AS l_bcp,
+            CONVERT(float, REPLACE(l_bbva, ',', '.'))  AS l_bbva,
+            CONVERT(float, REPLACE(l_ibk, ',', '.'))   AS l_ibk,
+            CONVERT(float, REPLACE(l_sco, ',', '.'))   AS l_sco,
+            CONVERT(float, REPLACE(l_bif, ',', '.'))   AS l_bif,
+            CONVERT(float, REPLACE(l_citi, ',', '.'))  AS l_citi,
+            CONVERT(float, REPLACE(l_fin, ',', '.'))   AS l_fin,
+            CONVERT(float, REPLACE(l_rip, ',', '.'))   AS l_rip,
+            CONVERT(float, REPLACE(l_cmr, ',', '.'))   AS l_cmr,
+            CONVERT(float, REPLACE(l_cresco, ',', '.'))AS l_cresco,
+            CONVERT(float, REPLACE(l_cen, ',', '.'))   AS l_cen,
+            CONVERT(float, REPLACE(l_azt, ',', '.'))   AS l_azt,
+            CONVERT(float, REPLACE(l_uno, ',', '.'))   AS l_uno,
+            CONVERT(float, REPLACE(l_gnb, ',', '.'))   AS l_gnb,
+            CONVERT(float, REPLACE(l_efe, ',', '.'))   AS l_efe,
+            CONVERT(float, REPLACE(l_com, ',', '.'))   AS l_com,
+            CONVERT(float, REPLACE(l_nac, ',', '.'))   AS l_nac,
+            campanasyd as straming,
+            fec_nac,
+            grupo_ejecucion as prioridad,
+            [id proveedor] as priori,servicio,
+            perfil as marca,
+            new_profile as prfl,
+            n_base,
+            recurrencia as marca3,
+            case when isnull(rep1,0)=1 then 'stock' else 'nuevo' end as recurr1m,
+            case when isnull(rep2,0)=1 then 'stock' else 'nuevo' end as recurr2m,
+            case when rep3=1 then 'stock' else 'nuevo' end as recurr3m,
+            case when (rep1=1 or rep2=1 or rep3=1) then 'stock' else 'nuevo' end as conjunto3meses,
+            marca as numtc,
+            marca2 as piloto,
+            marca3 as segmentacion,
+            fecha_envio,
+            provincia,
+            case
+                when prob_contacto ='CONTACTO A' then 1
+                when prob_contacto ='CONTACTO C' then 2
+                when prob_contacto ='CONTACTO B' then 3
+                when prob_contacto ='CONTACTO D' then 4
+                when prob_contacto ='2+' then 2.1
+                when prob_contacto ='1. DIAMANTE' then 1
+                when prob_contacto ='2. ZAFIRO' then 2
+                when prob_contacto ='2. ZAFIRO' then 2
+                when prob_contacto ='3. ESMERALDA' then 3
+                when prob_contacto ='4. RUBI' then 4
+                when prob_contacto ='5. ORO' then 5
+                when prob_contacto ='6. PLATA' then 6
+                else prob_contacto
+            end as prob_contacto,       
+            case
+                when len(replace(retiro,' ',''))>3  then lower(replace(retiro,' ','_'))
+                else 'no_aplica'
+            end as retiro ,
+            case when (rep1=1 or rep2=1 or rep3=1) then 'sotck' else 'nuevo' end as recurrencia3m
+        FROM DANTALION.dbo.BASE_MAESTRA_DINERS_TC
+        WHERE TRY_CONVERT(date, fecha_envio, 23) >= CONVERT(date, '{fecha_mes_base}', 23)
+        AND TRY_CONVERT(date, fecha_envio, 23) < DATEADD(MONTH, 1, CONVERT(date, '{fecha_mes_base}', 23))
+    """
+    df_base_p=obtener_tabla_sql(spark,query,server_kishin,user_kishin,pwd_kishin,db_kishin)
+
+    # from pyspark.sql.functions import greatest, col, when
+
+    df_base_p = df_base_p.withColumn(
+        "monto_title",
+        greatest(
+            F.col("l_ibk"), F.col("l_bcp"), F.col("l_bbva"), F.col("l_sco"),
+            F.col("l_bif"), F.col("l_citi"), F.col("l_fin"), F.col("l_rip"),
+            F.col("l_cmr"), F.col("l_cresco"), F.col("l_cen"), F.col("l_azt"),
+            F.col("l_uno"), F.col("l_gnb"), F.col("l_efe"), F.col("l_com"), F.col("l_nac")
+        )
+    )
+
+    df_base_p = df_base_p.withColumn(
+        "title",
+        F.when(F.col("monto_title") == F.col("l_ibk"), "l_ibk")
+        .when(F.col("monto_title") == F.col("l_bcp"), "l_bcp")
+        .when(F.col("monto_title") == F.col("l_bbva"), "l_bbva")
+        .when(F.col("monto_title") == F.col("l_sco"), "l_sco")
+        .when(F.col("monto_title") == F.col("l_bif"), "l_bif")
+        .when(F.col("monto_title") == F.col("l_citi"), "l_citi")
+        .when(F.col("monto_title") == F.col("l_fin"), "l_fin")
+        .when(F.col("monto_title") == F.col("l_rip"), "l_rip")
+        .when(F.col("monto_title") == F.col("l_cmr"), "l_cmr")
+        .when(F.col("monto_title") == F.col("l_cresco"), "l_cresco")
+        .when(F.col("monto_title") == F.col("l_cen"), "l_cen")
+        .when(F.col("monto_title") == F.col("l_azt"), "l_azt")
+        .when(F.col("monto_title") == F.col("l_uno"), "l_uno")
+        .when(F.col("monto_title") == F.col("l_gnb"), "l_gnb")
+        .when(F.col("monto_title") == F.col("l_efe"), "l_efe")
+        .when(F.col("monto_title") == F.col("l_com"), "l_com")
+        .when(F.col("monto_title") == F.col("l_nac"), "l_nac")
+        .otherwise("OTROS")
+    )
+
+    df_base_p = df_base_p.withColumn(
+        "seg_edad",
+        F.when((F.floor(F.months_between(F.current_date(), F.col("fec_nac"))/12) >= 20) &
+            (F.floor(F.months_between(F.current_date(), F.col("fec_nac"))/12) < 30), "a. 20 A 30")
+        .when((F.floor(F.months_between(F.current_date(), F.col("fec_nac"))/12) >= 30) &
+            (F.floor(F.months_between(F.current_date(), F.col("fec_nac"))/12) < 40), "b. 30 A 40")
+        .when((F.floor(F.months_between(F.current_date(), F.col("fec_nac"))/12) >= 40) &
+            (F.floor(F.months_between(F.current_date(), F.col("fec_nac"))/12) < 50), "c. 40 A 50")
+        .when((F.floor(F.months_between(F.current_date(), F.col("fec_nac"))/12) >= 50) &
+            (F.floor(F.months_between(F.current_date(), F.col("fec_nac"))/12) < 60), "d. 50 A 60")
+        .when((F.floor(F.months_between(F.current_date(), F.col("fec_nac"))/12) >= 60) &
+            (F.floor(F.months_between(F.current_date(), F.col("fec_nac"))/12) < 76), "e. 60 A 70")
+        .otherwise('f. Otros')
+    )
+    df_base_p = df_base_p.withColumn(
+        'edad',
+        F.floor(F.months_between(F.current_date(), F.col("fec_nac")) / 12)
+    )
+    df_base_p= df_base_p.withColumn(
+        "seg_oferta",
+        F.when((F.col("linea_credito") >= 1000) & (F.col("linea_credito") <= 2000), "A. 1,000 A 2000")
+        .when((F.col("linea_credito") > 2000) & (F.col("linea_credito") <= 4000), "A. 2,000 A 4000")
+        .when((F.col("linea_credito") > 4000) & (F.col("linea_credito") <= 6000), "B. 4,000 A 6,000")
+        .when((F.col("linea_credito") > 6000) & (F.col("linea_credito") <= 8000), "C. 6,000 A 8,000")
+        .when((F.col("linea_credito") > 8000) & (F.col("linea_credito") <= 10000), "D. 8,000 A 10,000")
+        .when((F.col("linea_credito") > 10000) & (F.col("linea_credito") <= 12000), "D. 10,000 A 12,000")
+        .when(F.col("linea_credito") > 12000, "E. 12,000 A MÁS")
+    )
+    return df_base_p.withColumn(
+        "vendor_lead_code",
+        F.right(
+            F.concat(F.lit("00000000"), F.col("vendor_lead_code")),
+            F.lit(8)
+        )
+    )
+
+def since_base_maestra_CENCO_EN_REVISION_maeba(spark,fecha_mes_base):
+    query = f"""
+        select 
+            numero_documento as vendor_lead_code,
+            [tasa(tea)] as tea,tea_df,tcea,tcea_cuotas_df,
+            isnull([producto],'') as first_name,
+            isnull([limaprovincia],'sin_departamento') as last_name,
+            ISNULL([nombres],'')+' '+ISNULL([apellido paterno],'')+' '+isnull([apellido materno],'') as address1,
+            datediff(year, try_convert(date, fec_nac, 23), getdate()) as address2,
+            'free'+' tea '+convert(varchar,tea_df)+' tcea '+convert(varchar,tcea_cuotas_df) as address3,
+            isnull(cashback,'') as city,
+            isnull(marca_speech,'') as province,
+            'tea'+' '+convert(varchar,[tasa(tea)])+' '+'tcea'+' '+ convert(varchar,tcea) as email,
+            'ofert.dolar'+' '+isnull([linea credito dolares],'') as security_phrase,
+            CAST(REPLACE([LINEA CREDITO DOLARES], ',', '') AS numeric(18,2)) AS linea_credito,
+            cprueba as comments,
+            CONVERT(float, REPLACE(l_bcp, ',', '.'))   AS l_bcp,
+            CONVERT(float, REPLACE(l_bbva, ',', '.'))  AS l_bbva,
+            CONVERT(float, REPLACE(l_ibk, ',', '.'))   AS l_ibk,
+            CONVERT(float, REPLACE(l_sco, ',', '.'))   AS l_sco,
+            CONVERT(float, REPLACE(l_bif, ',', '.'))   AS l_bif,
+            CONVERT(float, REPLACE(l_citi, ',', '.'))  AS l_citi,
+            CONVERT(float, REPLACE(l_fin, ',', '.'))   AS l_fin,
+            CONVERT(float, REPLACE(l_rip, ',', '.'))   AS l_rip,
+            CONVERT(float, REPLACE(l_cmr, ',', '.'))   AS l_cmr,
+            CONVERT(float, REPLACE(l_cresco, ',', '.'))AS l_cresco,
+            CONVERT(float, REPLACE(l_cen, ',', '.'))   AS l_cen,
+            CONVERT(float, REPLACE(l_azt, ',', '.'))   AS l_azt,
+            CONVERT(float, REPLACE(l_uno, ',', '.'))   AS l_uno,
+            CONVERT(float, REPLACE(l_gnb, ',', '.'))   AS l_gnb,
+            CONVERT(float, REPLACE(l_efe, ',', '.'))   AS l_efe,
+            CONVERT(float, REPLACE(l_com, ',', '.'))   AS l_com,
+            CONVERT(float, REPLACE(l_nac, ',', '.'))   AS l_nac,
+            campanasyd as straming,
+            fec_nac,
+            grupo_ejecucion as prioridad,
+            [id proveedor] as priori,servicio,
+            perfil as marca,
+            new_profile as prfl,
+            n_base,
+            recurrencia as marca3,
+            case when isnull(rep1,0)=1 then 'stock' else 'nuevo' end as recurr1m,
+            case when isnull(rep2,0)=1 then 'stock' else 'nuevo' end as recurr2m,
+            case when rep3=1 then 'stock' else 'nuevo' end as recurr3m,
+            case when (rep1=1 or rep2=1 or rep3=1) then 'stock' else 'nuevo' end as conjunto3meses,
+            marca as numtc,
+            marca2 as piloto,
+            marca3 as segmentacion,
+            fecha_envio,
+            provincia,
+            case
+                when prob_contacto ='CONTACTO A' then 1
+                when prob_contacto ='CONTACTO C' then 2
+                when prob_contacto ='CONTACTO B' then 3
+                when prob_contacto ='CONTACTO D' then 4
+                when prob_contacto ='2+' then 2.1
+                when prob_contacto ='1. DIAMANTE' then 1
+                when prob_contacto ='2. ZAFIRO' then 2
+                when prob_contacto ='2. ZAFIRO' then 2
+                when prob_contacto ='3. ESMERALDA' then 3
+                when prob_contacto ='4. RUBI' then 4
+                when prob_contacto ='5. ORO' then 5
+                when prob_contacto ='6. PLATA' then 6
+                else prob_contacto
+            end as prob_contacto,       
+            case
+                when len(replace(retiro,' ',''))>3  then lower(replace(retiro,' ','_'))
+                else 'no_aplica'
+            end as retiro ,
+            case when (rep1=1 or rep2=1 or rep3=1) then 'sotck' else 'nuevo' end as recurrencia3m
+        FROM DANTALION.dbo.BASE_MAESTRA_DINERS_TC
+        WHERE TRY_CONVERT(date, fecha_envio, 23) >= CONVERT(date, '{fecha_mes_base}', 23)
+        AND TRY_CONVERT(date, fecha_envio, 23) < DATEADD(MONTH, 1, CONVERT(date, '{fecha_mes_base}', 23))
+    """
+    df_base_p=obtener_tabla_sql(spark,query,server_kishin,user_kishin,pwd_kishin,db_kishin)
+
+    # from pyspark.sql.functions import greatest, col, when
+
+    df_base_p = df_base_p.withColumn(
+        "monto_title",
+        greatest(
+            F.col("l_ibk"), F.col("l_bcp"), F.col("l_bbva"), F.col("l_sco"),
+            F.col("l_bif"), F.col("l_citi"), F.col("l_fin"), F.col("l_rip"),
+            F.col("l_cmr"), F.col("l_cresco"), F.col("l_cen"), F.col("l_azt"),
+            F.col("l_uno"), F.col("l_gnb"), F.col("l_efe"), F.col("l_com"), F.col("l_nac")
+        )
+    )
+
+    df_base_p = df_base_p.withColumn(
+        "title",
+        F.when(F.col("monto_title") == F.col("l_ibk"), "l_ibk")
+        .when(F.col("monto_title") == F.col("l_bcp"), "l_bcp")
+        .when(F.col("monto_title") == F.col("l_bbva"), "l_bbva")
+        .when(F.col("monto_title") == F.col("l_sco"), "l_sco")
+        .when(F.col("monto_title") == F.col("l_bif"), "l_bif")
+        .when(F.col("monto_title") == F.col("l_citi"), "l_citi")
+        .when(F.col("monto_title") == F.col("l_fin"), "l_fin")
+        .when(F.col("monto_title") == F.col("l_rip"), "l_rip")
+        .when(F.col("monto_title") == F.col("l_cmr"), "l_cmr")
+        .when(F.col("monto_title") == F.col("l_cresco"), "l_cresco")
+        .when(F.col("monto_title") == F.col("l_cen"), "l_cen")
+        .when(F.col("monto_title") == F.col("l_azt"), "l_azt")
+        .when(F.col("monto_title") == F.col("l_uno"), "l_uno")
+        .when(F.col("monto_title") == F.col("l_gnb"), "l_gnb")
+        .when(F.col("monto_title") == F.col("l_efe"), "l_efe")
+        .when(F.col("monto_title") == F.col("l_com"), "l_com")
+        .when(F.col("monto_title") == F.col("l_nac"), "l_nac")
+        .otherwise("OTROS")
+    )
+
+    df_base_p = df_base_p.withColumn(
+        "seg_edad",
+        F.when((F.floor(F.months_between(F.current_date(), F.col("fec_nac"))/12) >= 20) &
+            (F.floor(F.months_between(F.current_date(), F.col("fec_nac"))/12) < 30), "a. 20 A 30")
+        .when((F.floor(F.months_between(F.current_date(), F.col("fec_nac"))/12) >= 30) &
+            (F.floor(F.months_between(F.current_date(), F.col("fec_nac"))/12) < 40), "b. 30 A 40")
+        .when((F.floor(F.months_between(F.current_date(), F.col("fec_nac"))/12) >= 40) &
+            (F.floor(F.months_between(F.current_date(), F.col("fec_nac"))/12) < 50), "c. 40 A 50")
+        .when((F.floor(F.months_between(F.current_date(), F.col("fec_nac"))/12) >= 50) &
+            (F.floor(F.months_between(F.current_date(), F.col("fec_nac"))/12) < 60), "d. 50 A 60")
+        .when((F.floor(F.months_between(F.current_date(), F.col("fec_nac"))/12) >= 60) &
+            (F.floor(F.months_between(F.current_date(), F.col("fec_nac"))/12) < 76), "e. 60 A 70")
+        .otherwise('f. Otros')
+    )
+    df_base_p = df_base_p.withColumn(
+        'edad',
+        F.floor(F.months_between(F.current_date(), F.col("fec_nac")) / 12)
+    )
+    df_base_p= df_base_p.withColumn(
+        "seg_oferta",
+        F.when((F.col("linea_credito") >= 1000) & (F.col("linea_credito") <= 2000), "A. 1,000 A 2000")
+        .when((F.col("linea_credito") > 2000) & (F.col("linea_credito") <= 4000), "A. 2,000 A 4000")
+        .when((F.col("linea_credito") > 4000) & (F.col("linea_credito") <= 6000), "B. 4,000 A 6,000")
+        .when((F.col("linea_credito") > 6000) & (F.col("linea_credito") <= 8000), "C. 6,000 A 8,000")
+        .when((F.col("linea_credito") > 8000) & (F.col("linea_credito") <= 10000), "D. 8,000 A 10,000")
+        .when((F.col("linea_credito") > 10000) & (F.col("linea_credito") <= 12000), "D. 10,000 A 12,000")
+        .when(F.col("linea_credito") > 12000, "E. 12,000 A MÁS")
+    )
+    return df_base_p.withColumn(
+        "vendor_lead_code",
+        F.right(
+            F.concat(F.lit("00000000"), F.col("vendor_lead_code")),
+            F.lit(8)
+        )
+    )
 
 
 def lista_generada_valentina(spark,fecha_mes_base,ls_una_vez,ls_casilla,ls_ocupado,tlista_generada,tb_tipolofia,tb_gestiones,tb_cliente,get_base,tb_tnumero):
