@@ -4,7 +4,7 @@ ruta_base = 'C:\\Users\\DATA\\Documents\\datos\\recepcion_base'
 
 ruta_csv='C:\\Users\\DATA\\Documents\\datos\\05_subir_csv'
 ruta_rrhh='C:\\Users\\DATA\\Documents\\datos\\05_subir_csv\\rrhh'
-
+ruta_ventas_desembolso='C:\\Users\\DATA\\Documents\\datos\\05_subir_csv\\ventas_desembolsos'
 # sql server
 port = '1433'
 
@@ -36,6 +36,24 @@ user_valentina = "flazo"
 pwd_valentina = "T4rg3t2026$$"
 server_valentina = "db.mastermold.dev"
 db_valentina = "crm_target"
+
+user_envio = "cron"
+pwd_envio = "1234"
+server_envio = "192.168.2.100"
+db_envio = "Alice"
+
+user_bot = "kishin"
+pwd_bot = ")k9t-NT5UcMM5iPn"
+server_bot = "192.168.3.7"
+db_bot = "asterisk"
+
+
+
+
+
+
+
+
 
 
 fuente_int='BBDD INT'

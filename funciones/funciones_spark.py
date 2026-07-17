@@ -949,6 +949,7 @@ def since_base_maestra_efe_consumo(spark):
                 when len(replace(retiro,' ',''))>3  then lower(replace(retiro,' ','_'))
                 else 'no_aplica'
             end as retiro     
+            ,cel01
         from dantalion.dbo.base_maestra_efectiva_vigente
         """
         
@@ -1064,7 +1065,7 @@ def since_base_maestra_efe_negocio(spark):
         [DIRECCION] as address2,  
         'EMP1='+[empresa1]+'/ EMP2='+[empresa2]+'/ EMP3='+ [empresa3] as address3,  
         Proceso as title,  
-        Montos_Referenciales as comments, 
+		isnull('RF_FT:'+MONTOREFERENCIALFT+'  ','')+	isnull('RF_HS:'+MONTOREFERENCIALHS,'') as comments,
         'IMPORTE DEUDA'+' '+CONVERT(VARCHAR,IMPDHM) as security_phrase,  
         NUMDOCUMENTO as vendor_lead_code,  
         PROVINCIA as province,  
@@ -1081,6 +1082,7 @@ def since_base_maestra_efe_negocio(spark):
         END as marca,  
         fecha_envio,      
         TIPOBASEMICROPEQUENA,     
+        Nacimiento,
         case
             when len(replace(retiro,' ',''))>3  then lower(replace(retiro,' ','_'))
             else 'no_aplica'
@@ -1119,6 +1121,25 @@ def since_base_maestra_efe_negocio(spark):
         )
         .otherwise("otra prioridad")
     )
+    df_base = df_base.withColumn(
+            "Nacimiento",
+            F.to_date(F.col("Nacimiento"))
+        )
+    
+    df_base = df_base.withColumn(
+        "seg_edad",
+        F.when((F.floor(F.months_between(F.current_date(), F.col("Nacimiento"))/12) >= 20) &
+            (F.floor(F.months_between(F.current_date(), F.col("Nacimiento"))/12) < 30), "a. 20 A 30")
+        .when((F.floor(F.months_between(F.current_date(), F.col("Nacimiento"))/12) >= 30) &
+            (F.floor(F.months_between(F.current_date(), F.col("Nacimiento"))/12) < 40), "b. 30 A 40")
+        .when((F.floor(F.months_between(F.current_date(), F.col("Nacimiento"))/12) >= 40) &
+            (F.floor(F.months_between(F.current_date(), F.col("Nacimiento"))/12) < 50), "c. 40 A 50")
+        .when((F.floor(F.months_between(F.current_date(), F.col("Nacimiento"))/12) >= 50) &
+            (F.floor(F.months_between(F.current_date(), F.col("Nacimiento"))/12) < 60), "d. 50 A 60")
+        .when((F.floor(F.months_between(F.current_date(), F.col("Nacimiento"))/12) >= 60) &
+            (F.floor(F.months_between(F.current_date(), F.col("Nacimiento"))/12) < 76), "e. 60 A 70")
+        .otherwise('f. Otros')
+    )
 
     return df_base.withColumn(
         "vendor_lead_code",
@@ -1127,6 +1148,7 @@ def since_base_maestra_efe_negocio(spark):
             F.lit(8)
         )
     )
+
     # print(df_base.columns)
 
 def since_base_maestra_tc_dinners(spark):
@@ -2491,7 +2513,6 @@ def lista_generada_dia(spark,fecha_mes_base,tipi_cond1,tipi_cond2,tipi_cond3,tb_
 
 
 
-
 def lista_generada_ml(spark,fecha_mes_base,tipi_cond1,tipi_cond2,tipi_cond3,tb_tipolofia,servidor_01,tipi_cod,tipi_resp_cod,tipi_descrip,tipi_estado,tipi_resp_estado,tipi_subdescripcion,tnum_tb,tnum_dni,tlista_generada,get_base,array_contactabilidad,array_interes_seguimiento,array_objecion_comercial,array_venta,array_no_relanzable,venta_campana_name):
 
     df_vicidial=since_vicidial(spark,fecha_mes_base,tipi_cond1,tipi_cond2,tipi_cond3,tb_tipolofia,servidor_01,tipi_cod,tipi_resp_cod,tipi_descrip,tipi_estado,tipi_resp_estado,tnum_tb,tnum_dni)
@@ -3620,4 +3641,9 @@ def exportar_lista(df,nombre_archivo_xlsx,columna_ref):
     ruta_archivo = os.path.join(ruta_csv, f'{nombre_archivo_xlsx}')
 
     de_resultado.to_excel(ruta_archivo, index=False)
+
+
+
+
+
 
