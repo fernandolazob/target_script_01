@@ -3,6 +3,10 @@ ruta_archivo_generado = "C:\\Users\\DATA\\Documents\\datos\\generado"
 ruta_base = 'C:\\Users\\DATA\\Documents\\datos\\recepcion_base'
 
 ruta_csv='C:\\Users\\DATA\\Documents\\datos\\05_subir_csv'
+ruta_alfin='C:\\Users\\DATA\\Documents\\datos\\05_subir_csv\\gestiones_alfin'
+ruta_negocios='C:\\Users\\DATA\\Documents\\datos\\05_subir_csv\\\gestiones_negocios'
+ruta_diners_tc='C:\\Users\\DATA\\Documents\\datos\\05_subir_csv\\\gestiones_diners_tc'
+ruta_cenco='C:\\Users\\DATA\\Documents\\datos\\05_subir_csv\\gestiones_cenco'
 ruta_rrhh='C:\\Users\\DATA\\Documents\\datos\\05_subir_csv\\rrhh'
 ruta_ventas_desembolso='C:\\Users\\DATA\\Documents\\datos\\05_subir_csv\\ventas_desembolsos'
 # sql server

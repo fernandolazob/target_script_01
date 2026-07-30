@@ -112,6 +112,7 @@ def list02_tc_dinners(spark):
     get_base=since_base_maestra_tc_dinners
     lista_generada(spark,fecha_mes_base,tipi_cond1,tipi_cond2,tipi_cond3,tb_tipolofia,servidor_01,tipi_cod,tipi_resp_cod,tipi_descrip,tipi_estado,tipi_resp_estado,tipi_subdescripcion,tnum_tb,tnum_dni,tlista_generada,get_base)
 
+
 def list02_prestamo_dinners(spark):
     fecha_mes_base='2026-07-01'
     # tipi_cond1='diners'
@@ -132,6 +133,7 @@ def list02_prestamo_dinners(spark):
     tlista_generada='borrar_prestamo_diner'
     get_base=since_base_maestra_pp_dinners
     lista_generada(spark,fecha_mes_base,tipi_cond1,tipi_cond2,tipi_cond3,tb_tipolofia,servidor_01,tipi_cod,tipi_resp_cod,tipi_descrip,tipi_estado,tipi_resp_estado,tipi_subdescripcion,tnum_tb,tnum_dni,tlista_generada,get_base)
+
 
 def list03_alfin(spark):
     ls_una_vez=[]
@@ -178,9 +180,9 @@ def list03_credicash(spark):
 
 # list02_tc_cenco(spark)
 
-list02_tc_dinners(spark) 
+# list02_tc_dinners(spark) 
 # list02_prestamo_dinners(spark)
-# list02_negocios_efe(spark)
+list02_negocios_efe(spark)
 # list02_consumo_efe(spark)
 # list02_prestamo_cenco(spark)
 

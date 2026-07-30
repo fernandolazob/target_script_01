@@ -21,6 +21,11 @@ def cargar_archivo_csv(spark,filename,sep,bol_header):
     filePath = os.path.join(ruta_csv, filename)
     return spark.read.csv(filePath, sep=sep, header=bol_header)
 
+def cargar_archivo_csv_ruta(spark,filename,sep,bol_header,la_ruta):
+    filePath = os.path.join(la_ruta, filename)
+    return spark.read.csv(filePath, sep=sep, header=bol_header)
+
+
 def obtener_tabla_sql(spark,query,server,username,pwd,db):
     #connTable='TB_outboundMovil'
     connTable=f"({query}) AS tmp"
