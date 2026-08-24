@@ -55,7 +55,7 @@ def descargar_archivos_adjuntos(remitentes_permitidos,extensiones_permitidas,pre
 
         return ruta_final
 
-    ruta_control = os.path.join(ruta_lista_descarga_archivos_correo,"control_descarga.csv")
+    ruta_control = os.path.join(ruta_lista_descarga_archivos_correo,"control_retiro_efe.csv")
     fecha_fin = fecha_inicio + timedelta(days=1)
 
     columnas_control = [
@@ -167,6 +167,8 @@ def descargar_archivos_adjuntos(remitentes_permitidos,extensiones_permitidas,pre
                 
             if correo_remitente not in remitentes_permitidos:
                 continue
+            if correo_remitente not in archivos_permitidos:
+                continue            
 
             asunto = (mensaje.Subject or "Sin asunto").strip()
 
@@ -363,8 +365,11 @@ ruta_lista_descarga_archivos_correo = r"\\192.168.2.12\SQLServer Compartido\001_
 
 
 remitentes_permitidos = {
-        "bmontenegroq@efectiva.com.pe",
-        "bmontenegroq@efectibank.pe",
+        "enviosbi@efectiva.com.pe",
+    }
+
+archivos_permitidos = {
+        "LISTA ROBINSON.CSV",
     }
 
 fecha_inicio = datetime.now().replace(

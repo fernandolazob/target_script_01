@@ -16,11 +16,11 @@ spark = SparkSession.builder \
 
 def list02_prestamo_cenco(spark):
     fecha_mes_base='2026-08-01'
+    servidor_01=76
     tipi_cond1='SAE'
     tipi_cond2='SAR'
     tipi_cond3='AGENDA'
     tb_tipolofia='tTipologia_Cencosud_PPFF'
-    servidor_01=76
     tipi_cod='Codigo'
     tipi_resp_cod='R0'
     tipi_descrip='DESCRIPCION'
@@ -56,11 +56,11 @@ def list02_tc_cenco(spark):
 
 def list02_consumo_efe(spark):
     fecha_mes_base='2026-08-01'
+    servidor_01=7
     tipi_cond1='EFECTIVA_NC'
     tipi_cond2='xx'
     tipi_cond3='xx'
     tb_tipolofia='tTipologia_Efectiva'
-    servidor_01=7
     tipi_cod='Codigo'
     tipi_resp_cod='B0'
     tipi_descrip='DESCRIPCION'
@@ -75,11 +75,11 @@ def list02_consumo_efe(spark):
 
 def list02_negocios_efe(spark):
     fecha_mes_base='2026-08-01'
+    servidor_01=64
     tipi_cond1='EFECTIVA_NEGOCIOS'
     tipi_cond2='xx'
     tipi_cond3='xx'
     tb_tipolofia='tTipologia_Efectiva'
-    servidor_01=64
     tipi_cod='Codigo'
     tipi_resp_cod='B0'
     tipi_descrip='DESCRIPCION'
@@ -95,11 +95,11 @@ def list02_negocios_efe(spark):
 
 def list02_tc_dinners(spark):
     fecha_mes_base='2026-08-01'
+    servidor_01=21
     tipi_cond1='DINERS TC'
     tipi_cond2='xx'
     tipi_cond3='xx'
     tb_tipolofia='tTipologia_Diners_TC'
-    servidor_01=21
     tipi_cod='cod'
     tipi_resp_cod='E0'
     tipi_descrip='[NIVEL 4]'
@@ -116,11 +116,11 @@ def list02_tc_dinners(spark):
 def list02_prestamo_dinners(spark):
     fecha_mes_base='2026-08-01'
     # tipi_cond1='diners'
+    servidor_01=21
     tipi_cond1='plus'
-    tipi_cond2='CD'
+    tipi_cond2='PPD'
     tipi_cond3='xx'
     tb_tipolofia='tTipologia_Diners_PPD'
-    servidor_01=21
     tipi_cod='cod'
     tipi_resp_cod='C0'
     tipi_descrip='[NIVEL 4]'
@@ -180,11 +180,11 @@ def list03_credicash(spark):
 
 # list02_tc_cenco(spark)
 
-list02_tc_dinners(spark) 
+# list02_tc_dinners(spark) 
 # list02_prestamo_dinners(spark)
-# list02_negocios_efe(spark)
-# list02_consumo_efe(spark)
 # list02_prestamo_cenco(spark)
+list02_negocios_efe(spark)
+# list02_consumo_efe(spark)
 
 # hugo.lopez@targetoutsourcing.com.pe
 
