@@ -384,7 +384,7 @@ prefijos = (
         "target_efectivo"
     )
 
-# fecha_inicio=fecha_inicio - timedelta(days=2)
+# fecha_inicio=fecha_inicio - timedelta(days=1)
 print(fecha_inicio)
 df_lista=descargar_archivos_adjuntos(remitentes_permitidos,extensiones_permitidas,prefijos,fecha_inicio,ruta_adjuntos_outlook,ruta_lista_descarga_archivos_correo)
 

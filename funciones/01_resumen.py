@@ -1,5 +1,5 @@
 import sys 
-sys.path.append('C:/Users/DATA/Documents/datos/01_script/inicio/funciones')
+sys.path.append('C:/Users/Data/Documents/lazo_fernando/target_script_01/funciones')
 from funciones import *
 from funciones_spark import *
 from variables_inicio import *
@@ -8,14 +8,14 @@ from utils_sql import *
 spark = SparkSession.builder \
     .appName("SparkExample") \
     .master("local[*]") \
-    .config('spark.driver.extraClassPath', 'C:/spark/jars/mssql-jdbc-13.2.1.jre11.jar') \
-    .config('spark.executor.extraClassPath', 'C:/spark/jars/mssql-jdbc-13.2.1.jre11.jar') \
+    .config('spark.driver.extraClassPath', 'C:/spark/jars/mssql-jdbc-13.4.0.jre11.jar') \
+    .config('spark.executor.extraClassPath', 'C:/spark/jars/mssql-jdbc-13.4.0.jre11.jar') \
     .config('spark.executor.memory', '8g') \
     .config('spark.driver.memory', '8g') \
     .getOrCreate()
 
 def list02_prestamo_cenco(spark):
-    fecha_mes_base='2026-08-01'
+    fecha_mes_base='2026-09-01'
     servidor_01=76
     tipi_cond1='SAE'
     tipi_cond2='SAR'
@@ -35,7 +35,7 @@ def list02_prestamo_cenco(spark):
     lista_generada(spark,fecha_mes_base,tipi_cond1,tipi_cond2,tipi_cond3,tb_tipolofia,servidor_01,tipi_cod,tipi_resp_cod,tipi_descrip,tipi_estado,tipi_resp_estado,tipi_subdescripcion,tnum_tb,tnum_dni,tlista_generada,get_base)
 
 def list02_tc_cenco(spark):
-    fecha_mes_base='2026-08-01'
+    fecha_mes_base='2026-09-01'
     tipi_cond1='CENCOSUD_TC'
     tipi_cond2='xx'
     tipi_cond3='xx'
@@ -55,7 +55,7 @@ def list02_tc_cenco(spark):
     lista_generada(spark,fecha_mes_base,tipi_cond1,tipi_cond2,tipi_cond3,tb_tipolofia,servidor_01,tipi_cod,tipi_resp_cod,tipi_descrip,tipi_estado,tipi_resp_estado,tipi_subdescripcion,tnum_tb,tnum_dni,tlista_generada,get_base)
 
 def list02_consumo_efe(spark):
-    fecha_mes_base='2026-08-01'
+    fecha_mes_base='2026-09-01'
     servidor_01=7
     tipi_cond1='EFECTIVA_NC'
     tipi_cond2='xx'
@@ -74,7 +74,7 @@ def list02_consumo_efe(spark):
     lista_generada(spark,fecha_mes_base,tipi_cond1,tipi_cond2,tipi_cond3,tb_tipolofia,servidor_01,tipi_cod,tipi_resp_cod,tipi_descrip,tipi_estado,tipi_resp_estado,tipi_subdescripcion,tnum_tb,tnum_dni,tlista_generada,get_base)
 
 def list02_negocios_efe(spark):
-    fecha_mes_base='2026-08-01'
+    fecha_mes_base='2026-09-01'
     servidor_01=64
     tipi_cond1='EFECTIVA_NEGOCIOS'
     tipi_cond2='xx'
@@ -94,7 +94,7 @@ def list02_negocios_efe(spark):
     lista_generada(spark,fecha_mes_base,tipi_cond1,tipi_cond2,tipi_cond3,tb_tipolofia,servidor_01,tipi_cod,tipi_resp_cod,tipi_descrip,tipi_estado,tipi_resp_estado,tipi_subdescripcion,tnum_tb,tnum_dni,tlista_generada,get_base)
 
 def list02_tc_dinners(spark):
-    fecha_mes_base='2026-08-01'
+    fecha_mes_base='2026-09-01'
     servidor_01=21
     tipi_cond1='DINERS TC'
     tipi_cond2='xx'
@@ -114,7 +114,7 @@ def list02_tc_dinners(spark):
 
 
 def list02_prestamo_dinners(spark):
-    fecha_mes_base='2026-08-01'
+    fecha_mes_base='2026-09-01'
     # tipi_cond1='diners'
     servidor_01=21
     tipi_cond1='plus'
@@ -142,7 +142,7 @@ def list03_alfin(spark):
     tb_gestiones='alfin_gestion'
     tb_cliente='alfin_clientes'
     tb_tipolofia='ALFin_tipificaciones'
-    fecha_mes_base='2026-08-01'
+    fecha_mes_base='2026-09-01'
     get_base=since_base_maestra_alfin
     tlista_generada='borrar_alfin_01'
     name_campana='alfin'
@@ -157,7 +157,7 @@ def list03_credicash(spark):
     tb_gestiones='alfcc_gestion'
     tb_cliente='alfcc_clientes'
     tb_tipolofia='ALFcc_tipificaciones'
-    fecha_mes_base='2026-08-01'
+    fecha_mes_base='2026-09-01'
     get_base=since_base_maestra_alfcc
     tlista_generada='borrar_credicash_01'
     name_campana='alfcc'
@@ -180,10 +180,10 @@ def list03_credicash(spark):
 
 # list02_tc_cenco(spark)
 
-# list02_tc_dinners(spark) 
+list02_tc_dinners(spark) 
 # list02_prestamo_dinners(spark)
 # list02_prestamo_cenco(spark)
-list02_negocios_efe(spark)
+# list02_negocios_efe(spark)
 # list02_consumo_efe(spark)
 
 # hugo.lopez@targetoutsourcing.com.pe
